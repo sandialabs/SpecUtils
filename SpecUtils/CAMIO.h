@@ -45,21 +45,55 @@ struct EfficiencyPoint {
     float EfficiencyUncertainty;
 };
 
+/** A peak-search/fit result, as stored in a CAM file's PEAK block.
+
+ Units were established by decoding a Genie-produced CNF with a populated PEAK block
+ (CNFreader's `Examples/cs137.CNF`) against its own reported calibration and ROI:
+ energy 661.706 keV, centroid 882.917 channels, FWHM 12.917 (its shape calibration gives
+ 12.05 keV at that energy - so keV, not channels), net area 2666562 counts over ROI 850-915,
+ count rate 360.3458 = area/live-time, and count-rate uncertainty 0.062916 = 100*areaUnc/area.
+ */
 struct Peak {
+    /** Peak energy, in keV. */
     float Energy;
     /** The channel number of the peak. */
     float Centroid;
+    /** Uncertainty in `Centroid`, in channels. */
     float CentroidUncertainty;
+    /** FWHM in keV (NOT channels). */
     float FullWidthAtHalfMaximum;
+    /** Genie's low-tail parameter `T`: how far below the centroid the Gaussian core is stitched
+     to an exponential low-energy tail,
+        P(x) = H*exp(-0.5*u^2)                      for u >= -T/sigma
+        P(x) = H*exp(0.5*(T/sigma)^2 + (T/sigma)*u) for u <  -T/sigma,  u = (x - centroid)/sigma
+     i.e. the "GaussExp" function, with `T/sigma` as its shape parameter.
+
+     Units are taken to be keV, to match `FullWidthAtHalfMaximum`; Genie's documentation says
+     "channels or energy units" without committing, and every real file seen here stores an
+     effectively-infinite value, so this could not be pinned down from data.
+
+     A large value means "no tail"; see `sm_no_low_tail`.
+     */
     float LowTail;
+    /** Net peak area, in counts. */
     float Area;
+    /** Absolute uncertainty on `Area`, in counts. */
     float AreaUncertainty;
+    /** Counts in the continuum under the peak's ROI. */
     float Continuum;
+    /** Currie critical level, in counts; 0 leaves it for Genie to determine. */
     float CriticalLevel;
+    /** Counts per second, i.e. `Area` divided by the live time. */
     float CountRate;
+    /** RELATIVE uncertainty on the count rate, as a PERCENT - i.e. `100*AreaUncertainty/Area`,
+     not an absolute counts-per-second value.
+     */
     float CountRateUncertainty;
     int LeftChannel;
     int RightChannel;
+
+    /** The `LowTail` value a real Genie file uses to mean "no low-energy tail". */
+    static constexpr float sm_no_low_tail = 1000.0f;
 
     Peak() = default;
     Peak(float energy, float centrd, float centrdUnc, float fwhm, float lowTail,
@@ -172,7 +206,11 @@ public:
     enum class RecordSize : uint16_t {
         ACQP = 0x0440,
         NUCL = 0x023B,
-        NLINES = 0x0085
+        NLINES = 0x0085,
+        //248; from a Genie-produced CNF that actually contains peak records (CNFreader's
+        // Examples/cs137.CNF).  Note this is not universal - another real file uses 214 - but
+        // both writer and reader take it from the block header, so it only needs to be plausible.
+        PEAK = 0x00F8
     };
 
     enum class BlockSize : uint16_t {
@@ -234,7 +272,10 @@ public:
 
     enum class EfficiencyModel : uint8_t
     {
-      SPLINE, EMPIRICAL, AVERAGE, DUAL, LINEAR, Unknown, NotReadin
+      SPLINE, EMPIRICAL, AVERAGE, DUAL, LINEAR,
+      /** Genie's tabulated/interpolated efficiency; seen in real Genie-written GEOM blocks. */
+      INTERPOL,
+      Unknown, NotReadin
     };
 
     //enum class FwhmType : uint8_t
@@ -267,11 +308,40 @@ private:
     EfficiencyModel writeEfficiencyModel = EfficiencyModel::Unknown;
     std::vector<EfficiencyPoint> writeEfficiencyPoints;
 
+    // Data staged for writing a PEAK block; see `AddPeak(s)`.
+    std::vector<Peak> writePeaks;
+
+    /** The ACQP and SAMP blocks' "common" sections, built up by the various `Add...(...)`
+     functions and written out by `CreateFile()`.
+
+     Note: these were previously file-scope variables shared by every `CAMIO`, which leaked
+     state between successive writes (a second file inherited the first one's energy
+     calibration, detector type, sample title, ...) and made concurrent writes race.
+     */
+    std::vector<byte_type> acqpCommon;
+    std::vector<byte_type> sampCommon;
+
     DetInfo det_info;
     uint32_t num_channels =0;
 
     static constexpr uint16_t header_size = 0x800;
     static constexpr uint16_t block_header_size = 0x30;
+
+    /** The most blocks a CAM file's block directory can describe.
+
+     The directory occupies 0x70 up to the first block at 0x800 in 0x30-byte entries (40 would
+     fit), but `ReadHeader()` only scans 28 - so 28 is the real, round-trippable limit.
+     */
+    static constexpr size_t sm_max_blocks = 28;
+
+    /** The most efficiency points a GEOM block can describe, bounded by its 32-bit size field. */
+    static constexpr size_t sm_max_efficiency_points = 4080;
+
+    // GEOM block geometry, taken from a real Genie-written block (the Ba-133 test file):
+    //  commonFlag 0x0500, recOffset 32, entOffset 0x04B2, entSize 33, model name at recOffset+222.
+    static constexpr uint16_t sm_geom_rec_offset = 32;
+    static constexpr uint16_t sm_geom_ent_offset = 0x04B2;
+    static constexpr uint16_t sm_geom_ent_size = 33;
     static constexpr uint8_t  nuclide_line_size = 0x03;
     static constexpr size_t file_header_length = 0x800;
     static constexpr size_t sec_header_length = 0x30;
@@ -286,16 +356,38 @@ public:
     void ReadFile(const std::vector<byte_type>& fileData);
 
     // get data from a file
+
+    /** Returns the nuclide library lines read from the file; the result is cached, so calling
+     this repeatedly is cheap and returns the same lines each time.
+
+     Note: this used to *append* to its cache on every call, so calling it twice - including the
+     easy-to-miss `GetNuclides(); GetLines();` sequence, since `GetNuclides()` populates the line
+     cache as a side effect - returned every line duplicated, and made `GetNuclides()` itself
+     wrong (it indexes into the line cache by line number).
+
+     Throws if the file has no NLINES block.
+     */
     std::vector<Line>& GetLines();
+
+    /** Returns the nuclides read from the file; populates the `GetLines()` cache as a side
+     effect if it is empty.
+
+     Throws if the file has no NUCL block, or no lines.
+     */
     std::vector<Nuclide>& GetNuclides();
     std::vector<Peak>& GetPeaks();
     std::vector<EfficiencyPoint>& GetEfficiencyPoints();
-    /** Only valid after `GetEfficiencyPoints()` has been called (will be `EfficiencyModel::NotReadin` in this case) */
+    /** The efficiency model named by the file; only valid once `GetEfficiencyPoints()` has been
+     called - until then this returns `EfficiencyModel::NotReadin`.
+     */
     EfficiencyModel GetEfficiencyModel() const;
     SpecUtils::time_point_t GetSampleTime();
     SpecUtils::time_point_t GetAquisitionTime();
     float GetLiveTime();
     float GetRealTime();
+    /** The four shape-calibration coefficients: `{B0, B1, B2, B3}`, where
+     `FWHM = B0 + B1*sqrt(E)` and the low tail is `T(E) = B2 + B3*E` (see `Peak::LowTail`).
+     */
     std::vector<float>& GetShapeCalibration();
     std::vector<float>& GetEnergyCalibration();
     std::vector<uint32_t>& GetSpectrum();
@@ -362,14 +454,26 @@ public:
     void AddLine(const Line& line);
     void AddLineAndNuclide(const float energy,  const float yield, const std::string& name, 
         const float halfLife, const std::string& halfLifeUnit, const bool noWeightMean = false,
-        const float enUnc = -1, const float yieldUnc = -1, const float halfLifeUnc = -1 );
+        const float enUnc = -1, const float yieldUnc = -1, const float halfLifeUnc = -1,
+        const bool isKeyLine = false );
     void AddEnergyCalibration(const std::vector<float> coefficients);
     void AddDetectorType(const std::string& detector_type);
 
-    /** Writes a real FWHM = fwhmOffset + fwhmSlope*sqrt(energy) shape calibration,
-     overwriting whatever `AddDetectorType(...)` may have set as a default.
+    /** Writes a real FWHM = fwhmOffset + fwhmSlope*sqrt(energy) shape calibration.
+
+     Writes the same three fields `AddDetectorType(...)` does, so it must be called *after* it to
+     override the detector-type default rather than be overridden by it.
      */
     void AddShapeCalibration(const float fwhmOffset, const float fwhmSlope);
+
+    /** Writes the low-tail shape calibration `T(E) = lowTailOffset + lowTailSlope*E`, where `T` is
+     the distance below a peak's centroid at which the Gaussian core is stitched to an exponential
+     tail - see `Peak::LowTail`.  Units follow the energy calibration, i.e. keV.
+
+     These are the third and fourth coefficients `GetShapeCalibration()` returns; leaving them zero
+     (the default) tells Genie the peaks have no low-energy tail.
+     */
+    void AddLowTailCalibration(const float lowTailOffset, const float lowTailSlope);
 
     /** Sets the efficiency model tag (e.g. "DUAL", "SPLINE") that will be written
      with the efficiency points added via `AddEfficiencyPoint(s)(...)`.
@@ -386,6 +490,19 @@ public:
      */
     void AddEfficiencyPoint(const float energy, const float efficiency, const float efficiencyUncertainty);
     void AddEfficiencyPoints(const std::vector<EfficiencyPoint>& points);
+
+    /** Adds a fitted peak to be written into the file's PEAK block.
+
+     The block header and the per-record field layout were both checked against a Genie-produced
+     CNF containing a real peak record (see `Peak` for the values used); every field this writes
+     was confirmed to decode back to the expected quantity.  What has NOT been verified is real
+     Genie *reading* a file we wrote.
+
+     See `Peak` for the units - note in particular that `FullWidthAtHalfMaximum` is in keV, and
+     `CountRateUncertainty` is a relative percent.
+     */
+    void AddPeak(const Peak& peak);
+    void AddPeaks(const std::vector<Peak>& peaks);
     void AddAcquitionTime(const SpecUtils::time_point_t& start_time);
     void AddRealTime(const float real_time);
     void AddLiveTime(const float live_time);
@@ -415,8 +532,10 @@ protected:
     std::vector<uint8_t> AddLinesToNuclide(const std::vector<uint8_t>& nuc, 
                                           const std::vector<uint8_t>& lineNums);
     std::vector<uint8_t> GenerateLine(const Line line);
+    /** Picks a "key" line for every nuclide that does not already have one explicitly marked. */
     void AssignKeyLines();
     std::vector<uint8_t> GenerateGeometryBlock(size_t loc);
+    std::vector<uint8_t> GeneratePeakBlock(size_t loc);
 
 protected:
     // Add block reading function declarations
@@ -454,12 +573,26 @@ struct CnfGenieExtras
         float energy = 0.0f;
         /** Negative (the default) leaves the energy uncertainty for `CAMIO` to estimate. */
         float energy_uncert = -1.0f;
+        /** Emission probability as a PERCENT (e.g. 85.3 for Cs137's 661.7 keV line), not a
+         fraction - this is what Genie's own library files store.
+         */
         float yield = 0.0f;
         /** Negative (the default) leaves the yield uncertainty for `CAMIO` to estimate. */
         float yield_uncert = -1.0f;
         /** Excludes this line from Genie's weighted-mean activity determination; set true for x-ray lines. */
         bool no_weight_mean = false;
+
+        /** Marks this as the nuclide's "key" line - the one Genie uses to decide the nuclide is
+         present.  If NO line of a given nuclide is marked, `CAMIO::AssignKeyLines()` picks one
+         for that nuclide; if any line is marked, the caller's choice is used verbatim, so what a
+         GUI previews and what lands in the file cannot disagree.
+         */
+        bool is_key_line = false;
     };
+
+    /** Lines are in GENIE's units: `energy` in keV, `yield` as a **percent** (0-100), matching
+     what `CAMIO::Line::Abundance` holds and what Genie-produced library files contain.
+     */
     std::vector<LibraryLine> library_lines;
 
     /** {FWHMOFF, FWHMSLOPE} for `FWHM = FWHMOFF + FWHMSLOPE*sqrt(energy)`; if not set,
@@ -467,8 +600,35 @@ struct CnfGenieExtras
      */
     std::optional<std::pair<float,float>> shape_cal;
 
+    /** `{B2, B3}` of the low-tail calibration `T(E) = B2 + B3*E`; see
+     `CAMIO::AddLowTailCalibration(...)`.  Leave unset for peaks with no low-energy tail.
+     */
+    std::optional<std::pair<float,float>> low_tail_cal;
+
     std::optional<CAMIO::EfficiencyModel> eff_model;
     std::vector<EfficiencyPoint> eff_points;
+
+    /** Fitted peaks to write into the file's PEAK block; see `CAMIO::AddPeak(...)` for the units,
+     and for how much (little) the PEAK write path has been validated.
+     */
+    std::vector<Peak> peaks;
+
+    /** If true, no spectrum (and hence no SPEC or SAMP block) is written - the result is a
+     nuclide-library / calibration-only CAM file, of the same shape as the `.nlb` files Genie's
+     Library Editor produces.
+
+     `SpecFile::write_cnf(...)` still needs a usable measurement to take the live/real times,
+     detector type and energy calibration from; it just leaves the channel counts out.
+     */
+    bool omit_spectrum = false;
+
+    /** If true, the energy calibration is left out of the file (`ECALFLAGS` is set to
+     "shape calibration only" and no coefficients are written).
+
+     Only honored when `omit_spectrum` is also true: channel counts are not interpretable without
+     their energy calibration, so a file that carries a spectrum always carries the calibration.
+     */
+    bool omit_energy_calibration = false;
 };//struct CnfGenieExtras
 
 

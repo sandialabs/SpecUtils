@@ -473,8 +473,23 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
         if( genie_extras && genie_extras->shape_cal )
           cam_obj.AddShapeCalibration( genie_extras->shape_cal->first, genie_extras->shape_cal->second );
 
+        if( genie_extras && genie_extras->low_tail_cal )
+          cam_obj.AddLowTailCalibration( genie_extras->low_tail_cal->first,
+                                         genie_extras->low_tail_cal->second );
+
         //energy calibration
-        cam_obj.AddEnergyCalibration(energy_cal_coeffs);
+        //  Note: the calibration can only be left out of a file that carries no spectrum; channel
+        //  counts are not interpretable without it.  Call AddEnergyCalibration({}) rather than
+        //  skipping the call, so the ACQP block still gets its "POLY"/"keV" strings and an
+        //  ECALFLAGS of 2 ("shape calibration only") instead of 0 ("nothing calibrated"), which
+        //  would also disclaim the shape calibration we just wrote.
+        const bool omit_spectrum = (genie_extras && genie_extras->omit_spectrum);
+        const bool omit_energy_cal = (omit_spectrum && genie_extras->omit_energy_calibration);
+
+        if( omit_energy_cal )
+          cam_obj.AddEnergyCalibration( {} );
+        else
+          cam_obj.AddEnergyCalibration( energy_cal_coeffs );
 
         // GENIE nuclide library and efficiency curve, if provided.
         if( genie_extras )
@@ -488,7 +503,8 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
           {
             cam_obj.AddLineAndNuclide( ll.energy, ll.yield, ll.nuclide_name,
                                        ll.half_life_seconds, "S", ll.no_weight_mean,
-                                       ll.energy_uncert, ll.yield_uncert, ll.half_life_uncert_seconds );
+                                       ll.energy_uncert, ll.yield_uncert, ll.half_life_uncert_seconds,
+                                       ll.is_key_line );
           }
 
           if( genie_extras->eff_model )
@@ -496,6 +512,9 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
 
           if( !genie_extras->eff_points.empty() )
             cam_obj.AddEfficiencyPoints( genie_extras->eff_points );
+
+          if( !genie_extras->peaks.empty() )
+            cam_obj.AddPeaks( genie_extras->peaks );
         }//if( genie_extras )
 
         //times
@@ -514,12 +533,19 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
             else
                 cam_obj.AddGPSData(summed->latitude(), summed->longitude(), summed->speed()); // if there is no position time stamp
         }
-        //enter the data 
-        cam_obj.AddSpectrum(gamma_channel_counts);
+        //enter the data - unless the caller asked for a library/calibration-only file, in which
+        //  case no SPEC (or SAMP) block is written at all, matching the shape of the `.nlb` files
+        //  Genie's own Library Editor produces.
+        if( !omit_spectrum )
+          cam_obj.AddSpectrum(gamma_channel_counts);
 
         auto& cnf_file = cam_obj.CreateFile();
         //write the file
          output.write((char* )cnf_file.data(), cnf_file.size());
+
+        //A short write (full disk, bad stream) must not be reported as success.
+        if( !output.good() )
+          return false;
     }catch( std::exception &e )
     {
 #if( PERFORM_DEVELOPER_CHECKS )

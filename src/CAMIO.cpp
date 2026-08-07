@@ -24,6 +24,7 @@
 #include <stdexcept>
 #include <algorithm>
 #include <cstring>
+#include <cassert>
 #include <array>
 #include <chrono>
 #include <regex>
@@ -47,11 +48,8 @@ const std::array<byte_type, 0x060> fileHeader = {
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
     };
 
-std::vector<byte_type>
-acqpCommon(static_cast<size_t>(CAMInputOutput::CAMIO::BlockSize::ACQP) - 0x30); // Initialize with zeros
-
-std::vector<byte_type>
-sampCommon(static_cast<size_t>(CAMInputOutput::CAMIO::BlockSize::SAMP ) - 0x30);
+// Note: acqpCommon/sampCommon used to live here as file-scope variables; they are now
+// per-`CAMIO` members (see CAMIO.h) so state cannot leak between, or race across, writes.
 
 const std::array<byte_type, 0x401> nuclCommon = {
          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -623,7 +621,10 @@ DetInfo::DetInfo(std::string type, std::string name, std::string serial_no,
     : Type(type), Name(name), SerialNo(serial_no), MCAType(mca_type){}
 
 // CAMIO constructor
-CAMIO::CAMIO() {
+CAMIO::CAMIO()
+  : acqpCommon( static_cast<size_t>(BlockSize::ACQP) - 0x30, 0 ),  // Initialize with zeros
+    sampCommon( static_cast<size_t>(BlockSize::SAMP) - 0x30, 0 )
+{
     // Initialize any necessary members
   //fwhmType = FwhmType::NotReadin;
   efficiencyModel = EfficiencyModel::NotReadin;
@@ -789,6 +790,8 @@ void CAMIO::ReadGeometryBlock(size_t pos, uint16_t records) {
         efficiencyModel = EfficiencyModel::DUAL;
       else if( type_str.find( "LINEAR" ) != std::string::npos )
         efficiencyModel = EfficiencyModel::LINEAR;
+      else if( type_str.find( "INTERPOL" ) != std::string::npos )
+        efficiencyModel = EfficiencyModel::INTERPOL;
       else
         efficiencyModel = EfficiencyModel::Unknown;
     }else
@@ -970,7 +973,7 @@ void CAMIO::ReadPeaksBlock(size_t pos, uint16_t records) {
             static_cast<size_t>(PeakParameterLocation::FullWidthAtHalfMaximum) + 4,
             static_cast<size_t>(PeakParameterLocation::LowTail) + 4,
             static_cast<size_t>(PeakParameterLocation::LeftChannel) + 4,
-            static_cast<size_t>(PeakParameterLocation::Width) + 4
+            static_cast<size_t>(PeakParameterLocation::Width) + 2
         });
         validate_bounds( *readData, loc, maxOffset, "ReadPeaksBlock: reading peak record" );
 
@@ -987,7 +990,9 @@ void CAMIO::ReadPeaksBlock(size_t pos, uint16_t records) {
         peak.FullWidthAtHalfMaximum = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::FullWidthAtHalfMaximum));
         peak.LowTail = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::LowTail));
         peak.LeftChannel = ReadUInt32(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::LeftChannel));
-        peak.RightChannel = peak.LeftChannel + ReadUInt32(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::Width)) - 1;
+        //  `Width` is 16 bits - reading it as a longword would pull in `Continuum` (0x0C) as its
+        //  high bytes.  `GetPeaks()` has always read it as 16 bits; this used to disagree.
+        peak.RightChannel = peak.LeftChannel + ReadUInt16(*readData, loc + static_cast<uint32_t>(PeakParameterLocation::Width)) - 1;
 
         tempPeaks.push_back(peak);
     }
@@ -998,6 +1003,11 @@ void CAMIO::ReadPeaksBlock(size_t pos, uint16_t records) {
 
 // get all the nuclide lines
 std::vector<Line>& CAMIO::GetLines() {
+    // Idempotent, like the other Get...() accessors - this used to append on every call, which
+    //  also silently corrupted `GetNuclides()` (it indexes into `fileLines` by line number).
+    if( !fileLines.empty() )
+      return fileLines;
+
     auto range = blockAddresses.equal_range(CAMBlock::NLINES);
     if (range.first == range.second) {
         throw std::runtime_error("There is no nuclide line data in the loaded file");
@@ -1628,41 +1638,90 @@ std::vector<byte_type>& CAMIO::CreateFile() {
         loc += geomBlockData.size();
     }
 
+    if (!writePeaks.empty())
+    {
+        auto peakBlockData = GeneratePeakBlock(loc);
+        blockList.push_back(peakBlockData);
+        loc += peakBlockData.size();
+    }
+
+    // NLINES/NUCL records can span several blocks, and each block in such a chain points at the
+    //  one that continues it via the single byte at block offset 0x0E, or 0 when the chain ends.
+    //
+    //  The value is the block's index in the file's block directory (the 0x30-byte entries
+    //  starting at file offset 0x70) of the *next* chain member, PLUS 2.  That `+ 2` was derived
+    //  from the only Genie-produced files available with multi-block chains, which agree
+    //  unanimously:
+    //     ExampleMultiNuclide.nlb   slot 2 (NLINES) -> next slot 3, byte 0x0E = 5
+    //     Q_C_UCRM125A_OSL_K_...CNF slot 0 (ACQP)   -> next slot 4, byte 0x0E = 6
+    //                               slot 4 (ACQP)   -> next slot 5, byte 0x0E = 7
+    //                               slot 5 (ACQP)   -> next slot 6, byte 0x0E = 8
+    //  In those same files the byte at 0x0F is a block-type flag (0x28 on NUCL/NLINES, 0x00 on
+    //  ACQP/SAMP/PROC/SPEC/GEOM), NOT the high byte of a 16-bit field - so only 0x0E may be
+    //  written here, and the index must fit in a byte.
+    //
+    //  The index has to be taken from `blockList` itself, since how many blocks precede the chain
+    //  varies with which of the optional SAMP/SPEC/GEOM blocks are present.  We also cannot know
+    //  whether a block ends the chain until after it has been generated (only then do we know how
+    //  many records it actually held), so the link is patched in afterwards.
+    const auto set_next_block_link = []( std::vector<uint8_t> &block, const size_t next_index ){
+        if( next_index == 0 )
+        {
+            block[0x0E] = 0;  //end of chain
+            return;
+        }
+
+        const size_t value = next_index + 2;
+        if( value > 255 )
+          throw std::runtime_error( "CAMIO::CreateFile: too many blocks to chain - next-block link ("
+                                    + std::to_string(value) + ") does not fit in a byte." );
+        block[0x0E] = static_cast<uint8_t>( value );
+    };//set_next_block_link lambda
+
     size_t startRecord = 0;
-    size_t numRecords = 125;
-    uint16_t blockNo = 0;
 
     while (startRecord < lines.size()) {
-        blockNo = ((startRecord + numRecords) > lines.size()) ? 0 : blockNo + 1;
-        
+        const size_t this_index = blockList.size();
+
         std::vector<std::vector<uint8_t>> lineSubset(lines.begin() + startRecord, lines.end());
-        auto block = GenerateBlock(CAMBlock::NLINES, loc, lineSubset, blockNo, startRecord == 0);
-        
-        numRecords = ReadUInt16(block, 0x1E);
-        startRecord += numRecords;
-        
+        auto block = GenerateBlock(CAMBlock::NLINES, loc, lineSubset, 0, startRecord == 0);
+
+        startRecord += ReadUInt16(block, 0x1E);
+
+        set_next_block_link( block, (startRecord < lines.size()) ? (this_index + 1) : 0 );
+
         blockList.push_back(block);
         loc += static_cast<uint32_t>(BlockSize::NLINES);
     }
 
     // Create and place the Nucs in the blocks array
     startRecord = 0;
-    numRecords = 29;
-    blockNo = static_cast<uint16_t>(blockList.size() - 2);
 
     while (startRecord < nucs.size()) {
-        blockNo = startRecord + numRecords > nucs.size() ? 0 : blockNo + 1;
-        
+        const size_t this_index = blockList.size();
+
         std::vector<std::vector<uint8_t>> nucSubset(nucs.begin() + startRecord, nucs.end());
-        auto block = GenerateBlock(CAMBlock::NUCL, loc, nucSubset, blockNo, startRecord == 0);
-        
-        numRecords = ReadUInt16(block, 0x1E);
-        startRecord += numRecords;
-        
+        auto block = GenerateBlock(CAMBlock::NUCL, loc, nucSubset, 0, startRecord == 0);
+
+        startRecord += ReadUInt16(block, 0x1E);
+
+        set_next_block_link( block, (startRecord < nucs.size()) ? (this_index + 1) : 0 );
+
         blockList.push_back(block);
         loc += static_cast<uint32_t>(BlockSize::NUCL);
     }
 
+
+    // The block directory lives between the file header and the first block (0x70 up to 0x800),
+    //  so only 40 entries physically fit - and `ReadHeader()` only ever scans 28 of them.  Past
+    //  that the directory would run into the first block and corrupt it, and `GenerateFile()`'s
+    //  bounds check cannot catch it (it only compares against the whole file's length).  Fail
+    //  loudly rather than write a file that silently loses nuclides.
+    if( blockList.size() > sm_max_blocks )
+      throw std::runtime_error( "CAMIO::CreateFile: too much data - would need "
+                                + std::to_string(blockList.size()) + " blocks, but a CAM file's"
+                                " block directory only supports " + std::to_string(sm_max_blocks)
+                                + ".  Reduce the number of nuclide library lines." );
 
     // Generate the file by combining blocks
     GenerateFile(blockList);
@@ -1678,6 +1737,17 @@ std::vector<byte_type>& CAMIO::CreateFile() {
     writeNuclides.clear();
     writeEfficiencyPoints.clear();
     writeEfficiencyModel = EfficiencyModel::Unknown;
+    writePeaks.clear();
+
+    // Reset the rest of the write-side state too, so this object can be used to write another
+    //  file without inheriting this one's calibrations, sample title, detector type or blocks.
+    //  (`writebytes` is deliberately left alone - it is what we are returning.)
+    acqpCommon.assign( acqpCommon.size(), 0 );
+    sampCommon.assign( sampCommon.size(), 0 );
+    specBlock = false;
+    sampBlock = false;
+    num_channels = 0;
+    det_info = DetInfo();
 
     return writebytes;
 }
@@ -1692,7 +1762,7 @@ void CAMIO::GenerateFile(const std::vector<std::vector<byte_type>>& blocks) {
 
     // Create the container
     //std::vector<uint8_t> file(fileLength);
-    writebytes.resize(fileLength);
+    writebytes.assign(fileLength, 0);  //assign (not resize) so no stale directory entries survive
 
     // fileHeader is a fixed-size array of 0x060 bytes, and writebytes is at least 0x800 bytes,
     // so this copy is always safe
@@ -1833,7 +1903,8 @@ void CAMIO::AddLine(const Line& line)
 // add a line and nuclide by values
 void CAMIO::AddLineAndNuclide(const float energy, const float yield, 
     const std::string& name, const float halfLife, const std::string& halfLifeUnit, 
-    const bool noWtMn, const float enUnc, const float yieldUnc, const float halfLifeUnc)
+    const bool noWtMn, const float enUnc, const float yieldUnc, const float halfLifeUnc,
+    const bool isKeyLine)
 
 {
     // check if the input has uncertainty, if not compute it from the value
@@ -1856,8 +1927,9 @@ void CAMIO::AddLineAndNuclide(const float energy, const float yield,
     {
         nucNo = (*it).Index;
     }
-    // The key line is set later
-    Line line(energy, energyUnc, yield, abundanceUnc, nucNo, false, noWtMn);
+    // If the caller did not mark any key line, `AssignKeyLines()` (called from `CreateFile()`)
+    //  picks one; if they did, theirs is kept.
+    Line line(energy, energyUnc, yield, abundanceUnc, nucNo, isKeyLine, noWtMn);
 
     AddLine(line); 
 
@@ -1910,6 +1982,14 @@ void CAMIO::AddShapeCalibration(const float fwhmOffset, const float fwhmSlope)
     enter_CAM_value(fwhmSlope, acqpCommon, 0x3CA, cam_type::cam_float);  //FWHMSLOPE
 }
 
+// The low-tail curve occupies the third and fourth shape-calibration coefficients, immediately
+// after FWHMOFF/FWHMSLOPE (GetShapeCalibration() reads all four from 0x30 + recOffset + 0xDC).
+void CAMIO::AddLowTailCalibration(const float lowTailOffset, const float lowTailSlope)
+{
+    enter_CAM_value(lowTailOffset, acqpCommon, 0x3CE, cam_type::cam_float); //LOTAIL0
+    enter_CAM_value(lowTailSlope, acqpCommon, 0x3D2, cam_type::cam_float);  //LOTAIL1
+}
+
 void CAMIO::AddEfficiencyModel(const EfficiencyModel model)
 {
     writeEfficiencyModel = model;
@@ -1939,13 +2019,26 @@ void CAMIO::AddEfficiencyPoints(const std::vector<EfficiencyPoint>& points)
 // Canberra/Mirion Genie 2000 software.
 std::vector<uint8_t> CAMIO::GenerateGeometryBlock(size_t loc)
 {
-    const uint16_t entOffset = 0x00C0;
-    const uint16_t entSize = 0x0010;
+    if( writeEfficiencyPoints.size() > sm_max_efficiency_points )
+      throw std::invalid_argument( "GenerateGeometryBlock: too many efficiency points ("
+                                   + std::to_string(writeEfficiencyPoints.size()) + "); the block"
+                                   " size field only supports " + std::to_string(sm_max_efficiency_points) + "." );
+
+    // These match a real Genie-written GEOM block (see the Ba-133 test file); the previous
+    //  values here were self-consistent with our own reader but looked nothing like a real file.
+    const uint16_t recOffset = sm_geom_rec_offset;
+    const uint16_t entOffset = sm_geom_ent_offset;
+    const uint16_t entSize = sm_geom_ent_size;
     const uint16_t numPoints = static_cast<uint16_t>(writeEfficiencyPoints.size());
 
-    const size_t blockSize = static_cast<size_t>(block_header_size) +
-                              static_cast<size_t>(entOffset) +
-                              static_cast<size_t>(entSize) * numPoints;
+    const size_t usedSize = static_cast<size_t>(block_header_size) +
+                             static_cast<size_t>(recOffset) +
+                             static_cast<size_t>(entOffset) +
+                             static_cast<size_t>(entSize) * numPoints;
+
+    // Every block in every Genie-produced file examined starts on, and is a multiple of, 512
+    //  bytes; pad to keep that invariant (real Genie GEOM blocks are a flat 0x1000).
+    const size_t blockSize = ((usedSize + 0x1FF) / 0x200) * 0x200;
 
     std::vector<uint8_t> block(blockSize, 0);
 
@@ -1953,6 +2046,7 @@ std::vector<uint8_t> CAMIO::GenerateGeometryBlock(size_t loc)
     // (matching ReadGeometryBlock()'s per-record entry-tag loop with the record index i=0).
     // The numLines parameter is repurposed here to carry the point count for block-size bookkeeping.
     const std::vector<uint8_t> header = GenerateBlockHeader(CAMBlock::GEOM, loc, 1, numPoints, 0, true);
+    //  (GenerateBlockHeader computes the same padded size from numPoints; keep them in step)
 
     if( header.size() > block.size() )
       throw std::out_of_range( "GenerateGeometryBlock: header larger than block" );
@@ -1966,6 +2060,7 @@ std::vector<uint8_t> CAMIO::GenerateGeometryBlock(size_t loc)
         case EfficiencyModel::AVERAGE:   modelStr = "AVERAGE";   break;
         case EfficiencyModel::DUAL:      modelStr = "DUAL";      break;
         case EfficiencyModel::LINEAR:    modelStr = "LINEAR";    break;
+        case EfficiencyModel::INTERPOL:  modelStr = "INTERPOL";  break;
         case EfficiencyModel::Unknown:
         case EfficiencyModel::NotReadin:
         default:
@@ -1973,15 +2068,16 @@ std::vector<uint8_t> CAMIO::GenerateGeometryBlock(size_t loc)
           break;
     }
 
-    // With commonFlag (values[0]) == 0x0700, ReadGeometryBlock() forces recOffset to 0, so the
-    // model-name string (read at pos+recOffset+222) lands at block-relative offset 222.
-    const size_t typeStrPos = 222;
+    // `ReadGeometryBlock()` reads the model name at pos+recOffset+222, and a real Genie file puts
+    //  it exactly there (a real block holds e.g. "INTERPOL" at recOffset 32 + 222).
+    const size_t typeStrPos = static_cast<size_t>(recOffset) + 222;
     if( (typeStrPos + 8) > block.size() )
       throw std::out_of_range( "GenerateGeometryBlock: block too small for model type string" );
     for( size_t i = 0; i < 8 && i < modelStr.size(); ++i )
       block[typeStrPos + i] = static_cast<uint8_t>(modelStr[i]);
 
-    const size_t entStart = static_cast<size_t>(block_header_size) + entOffset;
+    const size_t entStart = static_cast<size_t>(block_header_size)
+                             + static_cast<size_t>(recOffset) + static_cast<size_t>(entOffset);
     for( size_t i = 0; i < numPoints; ++i )
     {
         const size_t entPos = entStart + i * static_cast<size_t>(entSize);
@@ -1998,6 +2094,84 @@ std::vector<uint8_t> CAMIO::GenerateGeometryBlock(size_t loc)
 
     return block;
 }
+
+void CAMIO::AddPeak(const Peak& peak)
+{
+    writePeaks.push_back(peak);
+}
+
+void CAMIO::AddPeaks(const std::vector<Peak>& peaks_in)
+{
+    writePeaks.insert(writePeaks.end(), peaks_in.begin(), peaks_in.end());
+}
+
+// Generates the PEAK block from `writePeaks`.
+//
+// The block header mirrors the PEAK block of a real Genie-produced CNF (headSize 0x30,
+// recOffset 227, recSize 214, commonFlag 0x0500, 512-byte aligned size), and the record layout
+// matches `ReadPeaksBlock()`/`GetPeaks()`.  See `AddPeak()` for how little of this could be
+// validated: the one real PEAK block available holds a single all-zero record, so the field
+// offsets within a record are round-tripped against this class only.
+std::vector<uint8_t> CAMIO::GeneratePeakBlock(size_t loc)
+{
+    const uint16_t recOffset = 0x00F3;   //243, matching RecordSize::PEAK's source file
+    const uint16_t recSize = static_cast<uint16_t>( RecordSize::PEAK );
+
+    if( writePeaks.size() > 0xFFFF )
+      throw std::invalid_argument( "GeneratePeakBlock: too many peaks ("
+                                   + std::to_string(writePeaks.size()) + ")" );
+
+    const uint16_t numPeaks = static_cast<uint16_t>( writePeaks.size() );
+
+    // Records start one byte past the record area (see ReadPeaksBlock's `+ 0x01`).
+    const size_t recStart = static_cast<size_t>(block_header_size) + static_cast<size_t>(recOffset) + 1;
+    const size_t usedSize = recStart + static_cast<size_t>(recSize) * numPeaks;
+    const size_t blockSize = ((usedSize + 0x1FF) / 0x200) * 0x200;
+
+    std::vector<uint8_t> block(blockSize, 0);
+
+    const std::vector<uint8_t> header = GenerateBlockHeader(CAMBlock::PEAK, loc, numPeaks, 0, 0, true);
+    if( header.size() > block.size() )
+      throw std::out_of_range( "GeneratePeakBlock: header larger than block" );
+    std::copy(header.begin(), header.end(), block.begin());
+
+    for( size_t i = 0; i < numPeaks; ++i )
+    {
+        const size_t recPos = recStart + i * static_cast<size_t>(recSize);
+        if( (recPos + recSize) > block.size() )
+          throw std::out_of_range( "GeneratePeakBlock: record destination out of bounds" );
+
+        const Peak &p = writePeaks[i];
+
+        const auto put_float = [&block,recPos]( const PeakParameterLocation where, const float value ){
+            enter_CAM_value( value, block, recPos + static_cast<size_t>(where), cam_type::cam_float );
+        };
+
+        put_float( PeakParameterLocation::Energy, p.Energy );
+        put_float( PeakParameterLocation::Centroid, p.Centroid );
+        put_float( PeakParameterLocation::CentroidUncertainty, p.CentroidUncertainty );
+        put_float( PeakParameterLocation::FullWidthAtHalfMaximum, p.FullWidthAtHalfMaximum );
+        put_float( PeakParameterLocation::LowTail, p.LowTail );
+        put_float( PeakParameterLocation::Area, p.Area );
+        put_float( PeakParameterLocation::AreaUncertainty, p.AreaUncertainty );
+        put_float( PeakParameterLocation::Continuum, p.Continuum );
+        put_float( PeakParameterLocation::CriticalLevel, p.CriticalLevel );
+        put_float( PeakParameterLocation::CountRate, p.CountRate );
+        put_float( PeakParameterLocation::CountRateUncertainty, p.CountRateUncertainty );
+
+        // Note: `Width` is a 16-bit field.  Writing it as a longword would run into `Continuum`
+        //  at 0x0C and silently zero it - the byte budget only works if this is 16 bits, which is
+        //  also what `GetPeaks()` assumes.
+        const uint32_t left = (p.LeftChannel > 0) ? static_cast<uint32_t>(p.LeftChannel) : 0u;
+        const int width_int = (p.RightChannel >= p.LeftChannel) ? (p.RightChannel - p.LeftChannel + 1) : 1;
+        const uint16_t width = static_cast<uint16_t>( std::min(width_int, 0xFFFF) );
+        enter_CAM_value( left, block, recPos + static_cast<size_t>(PeakParameterLocation::LeftChannel), cam_type::cam_longword );
+        enter_CAM_value( width, block, recPos + static_cast<size_t>(PeakParameterLocation::Width), cam_type::cam_word );
+    }//for( loop over peaks )
+
+    return block;
+}//GeneratePeakBlock(...)
+
 
 // Add the count start time
 void CAMIO::AddAcquitionTime(const SpecUtils::time_point_t& start_time)
@@ -2086,18 +2260,27 @@ std::vector<byte_type> CAMIO::GenerateNuclide(const Nuclide nuclide,
     if( lineNums.empty() )
       throw std::invalid_argument( "GenerateNuclide: lineNums must not be empty" );
 
-    if( lineNums.size() > 100000 )
-      throw std::invalid_argument( "GenerateNuclide: too many lines" );
-
     const size_t numLines = lineNums.size();
     const size_t nucRecSize = static_cast<size_t>( RecordSize::NUCL );
+
+    // The record's size field (which `GetNuclides()` reads back as a little-endian uint16 at
+    //  offset 0, and from which it derives the line count) has to hold the whole record.
+    const size_t sizeField = (numLines - 1)*3 + nucRecSize + 0x03;
+    if( sizeField > 0xFFFF )
+      throw std::invalid_argument( "GenerateNuclide: too many lines for one nuclide ("
+                                   + std::to_string(numLines) + "); the record size field is only"
+                                   " 16 bits." );
+
     std::vector<uint8_t> nuc( nucRecSize + numLines * 3 );
 
-    // Set the number of line parameter
-    nuc[0] = static_cast<uint8_t>( (numLines - 1) * 3 + nucRecSize + 0x03 );
+    // Set the number of line parameter.
+    //  Note: this is a real 16-bit field - writing only the low byte and hard-coding 0x02 as the
+    //  "spacer" at offset 1 (as this used to) silently produced unreadable records for any
+    //  nuclide with more than 65 lines, which nuclides like Eu-152 and Bi-214 easily exceed.
+    nuc[0] = static_cast<uint8_t>( sizeField & 0xFF );
+    nuc[1] = static_cast<uint8_t>( (sizeField >> 8) & 0xFF );
 
     // Set the spacer
-    nuc[1] = 0x02;
     nuc[2] = 0x01;
     nuc[0x5f] = 0x01;
 
@@ -2398,6 +2581,10 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
 
     std::vector<uint8_t> header(0x30, 0);
 
+    // Note: the `+ 4` here assumes exactly four blocks (ACQP, SAMP, PROC, SPEC) precede the
+    //  NUCL/NLINES chain, which is not true in general (SAMP, SPEC and GEOM are all optional).
+    //  `CreateFile()` therefore passes `blockNum == 0` and patches the real link in afterwards;
+    //  see `set_next_block_link` there.
     uint16_t blockRec = blockNum >= 1 ? blockNum + 4 : 0;
 
     // Default values for ACQP
@@ -2428,32 +2615,67 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
     switch (block) {
       case CAMBlock::ACQP:
       case CAMBlock::DISP:
-      case CAMBlock::PEAK:
         // No action
         break;
+
+        case CAMBlock::PEAK:
+        {
+            // Values taken from the PEAK block of a Genie-produced CNF; `numRec` carries the peak
+            //  count.  See `GeneratePeakBlock()`.
+            const uint16_t recOffsetPeak = 0x00F3;  //243
+            const uint16_t recSizePeak = static_cast<uint16_t>( RecordSize::PEAK );
+
+            values[0] = 0x0500;             // commonFlag
+            values[11] = numRec;            // number of peak records
+            values[12] = recSizePeak;
+            values[13] = recOffsetPeak;
+            values[14] = 0x7FFF;
+            values[15] = 0x0000;
+            values[16] = 0x7FFF;            // no entries
+            values[17] = 0x0000;
+
+            const uint32_t usedSize = static_cast<uint32_t>(values[4]) +
+                                       static_cast<uint32_t>(recOffsetPeak) + 1u +
+                                       static_cast<uint32_t>(recSizePeak) * numRec;
+            const uint32_t totalSize = ((usedSize + 0x1FFu) / 0x200u) * 0x200u;
+            values[1] = static_cast<uint16_t>(totalSize & 0xFFFF);
+            values[2] = static_cast<uint16_t>((totalSize >> 16) & 0xFFFF);
+            values[19] = static_cast<uint16_t>(usedSize & 0xFFFF);
+            break;
+        }
 
         case CAMBlock::GEOM:
         {
             // numRec is always 1 (a single logical "record" holding all efficiency-point
             // entries); numLines is repurposed to carry the efficiency point count.
-            const uint16_t entOffsetGeom = 0x00C0;
-            const uint16_t entSizeGeom = 0x0010;
+            // Values from a real Genie-written GEOM block (Ba-133 test file).
+            const uint16_t entOffsetGeom = sm_geom_ent_offset;
+            const uint16_t entSizeGeom = sm_geom_ent_size;
+            const uint16_t recOffsetGeom = sm_geom_rec_offset;
             const uint16_t numPointsGeom = numLines;
 
-            values[0] = 0x0700;          // commonFlag - forces recOffset to 0 on read
+            values[0] = 0x0500;          // commonFlag
             values[11] = 1;              // numRec
-            values[12] = entSizeGeom;    // recSize (unused for a single record)
-            values[13] = 0x0000;         // recOffset
+            values[12] = 0x0F02;         // recSize (3842, as in a real block)
+            values[13] = recOffsetGeom;  // recOffset
             values[14] = 0x7FFF;
             values[15] = 0x0000;
             values[16] = entOffsetGeom;  // entOffset
             values[17] = entSizeGeom;    // entSize
 
-            const uint32_t totalSize = static_cast<uint32_t>(values[4]) +
-                                        static_cast<uint32_t>(entOffsetGeom) +
-                                        static_cast<uint32_t>(entSizeGeom) * numPointsGeom;
+            const uint32_t usedSize = static_cast<uint32_t>(values[4]) +
+                                       static_cast<uint32_t>(recOffsetGeom) +
+                                       static_cast<uint32_t>(entOffsetGeom) +
+                                       static_cast<uint32_t>(entSizeGeom) * numPointsGeom;
+            // Pad to a 512-byte multiple, to match `GenerateGeometryBlock()` and every real file.
+            const uint32_t totalSize = ((usedSize + 0x1FF) / 0x200) * 0x200;
+
+            // The block-size field at 0x06 is 32 bits (values[1] is its low word, values[2] its
+            //  high word - see the SPEC case below); writing only the low word silently wrapped
+            //  past 4080 efficiency points.
             values[1] = static_cast<uint16_t>(totalSize & 0xFFFF);
-            values[19] = static_cast<uint16_t>(totalSize & 0xFFFF);
+            values[2] = static_cast<uint16_t>((totalSize >> 16) & 0xFFFF);
+            values[19] = static_cast<uint16_t>(usedSize & 0xFFFF);
             break;
         }
 
@@ -2915,6 +3137,19 @@ void CAMInputOutput::CAMIO::AssignKeyLines()
     // Loop through the nucludies
     for(size_t n = 0; n < nucs.size(); n++)
     {
+        // If the caller explicitly marked a key line for this nuclide, honor it rather than
+        //  second-guessing them - otherwise a GUI preview and the written file can disagree.
+        bool already_assigned = false;
+        for( size_t l = 0; !already_assigned && (l < lines.size()); l++ )
+        {
+            const size_t nucIndex = static_cast<size_t>(ReadUInt16(lines[l], LineParameterLocation::NuclideIndex));
+            already_assigned = ( (n == (nucIndex - uint16_t(1)))
+                                 && (lines[l][LineParameterLocation::IsKeyLine] == 0x04) );
+        }
+
+        if( already_assigned )
+          continue;
+
         size_t largestScoreIndex = 0, lastIndex = 0, numNucs = 0;
         float keySocore = 0., energy = 0.;
         // Find all the lines for that nuclide and keep track of the largest abundance
