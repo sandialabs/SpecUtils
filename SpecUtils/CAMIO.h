@@ -311,6 +311,12 @@ private:
     // Data staged for writing a PEAK block; see `AddPeak(s)`.
     std::vector<Peak> writePeaks;
 
+    /** Timestamp written as when the peak search/fit was performed; see `GeneratePeakBlock()`.
+     Set from `AddAcquitionTime(...)` so writing a file stays deterministic (a real Genie file
+     would carry the time analysis was actually run, which is a little later).
+     */
+    SpecUtils::time_point_t analysisTime{};
+
     /** The ACQP and SAMP blocks' "common" sections, built up by the various `Add...(...)`
      functions and written out by `CreateFile()`.
 
@@ -342,6 +348,20 @@ private:
     static constexpr uint16_t sm_geom_rec_offset = 32;
     static constexpr uint16_t sm_geom_ent_offset = 0x04B2;
     static constexpr uint16_t sm_geom_ent_size = 33;
+
+    // PEAK block geometry, taken from Genie-written files (CNFreader's cs137.CNF, and the Ba-133
+    //  test file), which agree on all of it.  The block's "common" area names the algorithms that
+    //  produced the peaks; Genie writes these whenever a PEAK block is populated, and a file
+    //  without them appears to have its peak records ignored.
+    static constexpr size_t sm_genie_peak_block_size = 0x3000;
+    static constexpr size_t sm_genie_peak_search_name_offset = 0x3C;
+    static constexpr size_t sm_genie_peak_fit_name_offset = 0x9D;
+    /** The two "when this ran" timestamps in that common area; one second apart in the Ba-133
+     file, so presumably the search and then the fit.  These offsets are where the real files put
+     them - do not derive them from the name offsets, the first name has no timestamp before it.
+     */
+    static constexpr size_t sm_genie_peak_time_offsets[2] = { 0x8D, 0xB9 };
+
     static constexpr uint8_t  nuclide_line_size = 0x03;
     static constexpr size_t file_header_length = 0x800;
     static constexpr size_t sec_header_length = 0x30;

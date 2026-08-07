@@ -1748,6 +1748,7 @@ std::vector<byte_type>& CAMIO::CreateFile() {
     sampBlock = false;
     num_channels = 0;
     det_info = DetInfo();
+    analysisTime = SpecUtils::time_point_t{};
 
     return writebytes;
 }
@@ -2123,10 +2124,17 @@ std::vector<uint8_t> CAMIO::GeneratePeakBlock(size_t loc)
 
     const uint16_t numPeaks = static_cast<uint16_t>( writePeaks.size() );
 
-    // Records start one byte past the record area (see ReadPeaksBlock's `+ 0x01`).
-    const size_t recStart = static_cast<size_t>(block_header_size) + static_cast<size_t>(recOffset) + 1;
-    const size_t usedSize = recStart + static_cast<size_t>(recSize) * numPeaks;
-    const size_t blockSize = ((usedSize + 0x1FF) / 0x200) * 0x200;
+    // Each record begins with a 0x01 marker byte, with the first field one byte further in (this
+    //  is the same shape as a line record, whose byte 0 is likewise 0x01 - see
+    //  `LineParameterLocation::Energy`, which is 0x01 for that reason).  `ReadPeaksBlock` folds
+    //  that byte into the record start instead, hence its `+ 0x01`.
+    const size_t recBase = static_cast<size_t>(block_header_size) + static_cast<size_t>(recOffset);
+    const size_t usedSize = recBase + static_cast<size_t>(recSize) * numPeaks;
+
+    // Real Genie files always allocate 0x3000 for the PEAK block, whether it holds 1 peak or 23,
+    //  so match that unless there are enough peaks to need more.
+    const size_t blockSize = std::max<size_t>( sm_genie_peak_block_size,
+                                               ((usedSize + 0x1FF) / 0x200) * 0x200 );
 
     std::vector<uint8_t> block(blockSize, 0);
 
@@ -2135,11 +2143,40 @@ std::vector<uint8_t> CAMIO::GeneratePeakBlock(size_t loc)
       throw std::out_of_range( "GeneratePeakBlock: header larger than block" );
     std::copy(header.begin(), header.end(), block.begin());
 
+    // The PEAK block's "common" area names the algorithms that produced the peaks.  Genie writes
+    //  these into every file with a populated PEAK block, and appears to use them to decide a peak
+    //  search/fit was actually performed - without them it ignores the records entirely.  Offsets
+    //  and strings are copied verbatim from Genie-written files (cs137.CNF and Ba-133.cnf, which
+    //  agree on all of this apart from the fit version and the timestamps we leave zeroed).
+    const auto put_string = [&block]( const size_t offset, const char * const str ){
+        const size_t len = std::strlen( str );
+        if( (offset + len) > block.size() )
+          throw std::out_of_range( "GeneratePeakBlock: analysis-engine name out of bounds" );
+        std::memcpy( &block[offset], str, len );
+    };
+
+    put_string( sm_genie_peak_search_name_offset, "2nd Diff v2.1   " );
+    put_string( sm_genie_peak_fit_name_offset,    "NLSQ Fit v2.8   " );
+
+    if( !SpecUtils::is_special(analysisTime) )
+    {
+        for( const size_t offset : sm_genie_peak_time_offsets )
+          enter_CAM_value( analysisTime, block, offset, cam_type::cam_datetime );
+    }
+
+    // 0x30 looks to be a bitmask of which analysis steps ran: the Ba-133 file has 0x22 and also
+    //  carries a "Std Efcor v2.1" entry, while cs137.CNF has 0x20 and does not.  We do no
+    //  efficiency correction of peak areas, so 0x20 is the case we match.
+    enter_CAM_value( uint32_t(0x20), block, 0x30, cam_type::cam_longword );
+    enter_CAM_value( uint32_t(0xFFFFFFFF), block, 0x38, cam_type::cam_longword );
+
     for( size_t i = 0; i < numPeaks; ++i )
     {
-        const size_t recPos = recStart + i * static_cast<size_t>(recSize);
+        const size_t recPos = recBase + i * static_cast<size_t>(recSize) + 1;
         if( (recPos + recSize) > block.size() )
           throw std::out_of_range( "GeneratePeakBlock: record destination out of bounds" );
+
+        block[recPos - 1] = 0x01;  //record marker; see `recBase` above
 
         const Peak &p = writePeaks[i];
 
@@ -2181,6 +2218,8 @@ void CAMIO::AddAcquitionTime(const SpecUtils::time_point_t& start_time)
 
     //set the sampling time to the aqusition start time
     enter_CAM_value(start_time, sampCommon, 0xB4, cam_type::cam_datetime);
+
+    analysisTime = start_time;
 }
 // Add the real time
 void CAMIO::AddRealTime(const float real_time)
@@ -2626,6 +2665,10 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
             const uint16_t recSizePeak = static_cast<uint16_t>( RecordSize::PEAK );
 
             values[0] = 0x0500;             // commonFlag
+            values[3] = 0x1400;             // block-type flag; byte 0x0F is 0x14 for PEAK
+            values[5] = 0xF890;             // \  block-type descriptor, identical in every
+            values[6] = 0x000D;             //  > Genie-written PEAK block seen (cf. the NUCL,
+            values[7] = 0x2400;             // /  NLINES and PROC cases below/above)
             values[11] = numRec;            // number of peak records
             values[12] = recSizePeak;
             values[13] = recOffsetPeak;
@@ -2634,10 +2677,13 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
             values[16] = 0x7FFF;            // no entries
             values[17] = 0x0000;
 
+            // Genie computes this without counting the per-record 0x01 marker byte.
             const uint32_t usedSize = static_cast<uint32_t>(values[4]) +
-                                       static_cast<uint32_t>(recOffsetPeak) + 1u +
+                                       static_cast<uint32_t>(recOffsetPeak) +
                                        static_cast<uint32_t>(recSizePeak) * numRec;
-            const uint32_t totalSize = ((usedSize + 0x1FFu) / 0x200u) * 0x200u;
+            const uint32_t totalSize = std::max<uint32_t>(
+                                        static_cast<uint32_t>(sm_genie_peak_block_size),
+                                        ((usedSize + 0x1FFu) / 0x200u) * 0x200u );
             values[1] = static_cast<uint16_t>(totalSize & 0xFFFF);
             values[2] = static_cast<uint16_t>((totalSize >> 16) & 0xFFFF);
             values[19] = static_cast<uint16_t>(usedSize & 0xFFFF);
