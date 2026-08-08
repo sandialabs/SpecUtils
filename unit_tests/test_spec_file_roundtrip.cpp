@@ -21,6 +21,12 @@
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+#include <algorithm>
+#include <cstdint>
+#include <cstring>
+#include <fstream>
+#include <iterator>
+#include <limits>
 #include <set>
 #include <string>
 #include <vector>
@@ -34,6 +40,8 @@
 #include "doctest.h"
 
 #include "SpecUtils/SpecFile.h"
+#include "SpecUtils/CAMIO.h"
+#include "SpecUtils/EnergyCalibration.h"
 #include "SpecUtils/DateTime.h"
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/Filesystem.h"
@@ -518,4 +526,160 @@ TEST_CASE( "Roundtrip passthrough.n42" )
   REQUIRE_MESSAGE( SpecUtils::is_file( filepath ), "Test file not found: " << filepath );
 
   run_roundtrip_for_file( filepath, "passthrough.n42" );
+}
+
+
+TEST_CASE( "IEC declarations are bounded and match retained channel data" )
+{
+  const auto make_iec_test_input = []( const string &declaration, const size_t count,
+                                       const size_t first_channel = 0 ) {
+    ostringstream out;
+    out << "A004 SYSTEM  SUBSYS  00000000000000\n"
+        << "A004 1 1 " << declaration << "\n"
+        << "A004 01/01/24 00:00:00 01/01/24 00:00:01\n"
+        << "A004 0 1 0 0\n"
+        << "A004 1 0 0 0 0.5\n";
+
+    for( size_t offset = 0; offset < count; offset += 5 )
+    {
+      out << "A004 " << (first_channel + offset);
+      const size_t row_count = std::min(size_t(5), count - offset);
+      for( size_t i = 0; i < row_count; ++i )
+        out << " 1";
+      out << "\n";
+    }
+    return out.str();
+  };
+
+  for( const string &declaration : {"9999999", "131073", "64.5", "nan"} )
+  {
+    SpecFile file;
+    istringstream input( make_iec_test_input(declaration, 64) );
+    CHECK_FALSE( file.load_from_spectraline_iec(input) );
+  }
+
+  // A file that declares more channels than it carries is accepted as a truncated
+  // spectrum: the retained counts still start at channel 0 and are contiguous, so
+  // they line up with the energy calibration.  The shortfall is reported.
+  {
+    SpecFile file;
+    istringstream input( make_iec_test_input("128", 65) );
+    CHECK( file.load_from_spectraline_iec(input) );
+    REQUIRE( file.measurements().size() == 1 );
+    const auto meas = file.measurements().front();
+    CHECK( meas->num_gamma_channels() == 65 );
+    bool noted_truncation = false;
+    for( const string &warning : meas->parse_warnings() )
+      noted_truncation |= (warning.find("truncated") != string::npos);
+    CHECK( noted_truncation );
+  }
+
+  // Channel data that does not begin at channel 0 is rejected - accepting it would
+  // shift every count against the record-4 energy polynomial.
+  {
+    SpecFile file;
+    istringstream input( make_iec_test_input("128", 125, 5) );
+    CHECK_FALSE( file.load_from_spectraline_iec(input) );
+  }
+  {
+    SpecFile file;
+    istringstream input( make_iec_test_input("64", 64) );
+    CHECK( file.load_from_spectraline_iec(input) );
+    REQUIRE( file.measurements().size() == 1 );
+    CHECK( file.measurements().front()->num_gamma_channels() == 64 );
+  }
+  {
+    SpecFile file;
+    const size_t maximum = EnergyCalibration::sm_max_channels;
+    istringstream input( make_iec_test_input(std::to_string(maximum), maximum) );
+    CHECK( file.load_from_spectraline_iec(input) );
+    REQUIRE( file.measurements().size() == 1 );
+    CHECK( file.measurements().front()->num_gamma_channels() == maximum );
+  }
+}
+
+
+TEST_CASE( "N42-2006 detector descriptions remain XML text" )
+{
+  const string indir = get_indir();
+  REQUIRE_MESSAGE( !indir.empty(), "No --indir specified" );
+  const string repo_root = SpecUtils::parent_path( SpecUtils::parent_path(indir) );
+  const string path = SpecUtils::append_path(repo_root, "bindings/python/examples/passthrough.n42");
+  ifstream input_file( path, ios::binary );
+  REQUIRE( input_file.good() );
+  string input( (istreambuf_iterator<char>(input_file)), istreambuf_iterator<char>() );
+
+  const string original = "<DetectorType>HPGe 50%</DetectorType>";
+  const string replacement =
+      "<DetectorType>safe&lt;/DetectorType&gt;&lt;ChannelData&gt;injected"
+      "&lt;/ChannelData&gt;&lt;DetectorType&gt;</DetectorType>";
+  const size_t position = input.find(original);
+  REQUIRE( position != string::npos );
+  input.replace(position, original.size(), replacement);
+
+  SpecFile file;
+  istringstream input_stream(input);
+  REQUIRE( file.load_from_N42(input_stream) );
+  ostringstream output;
+  REQUIRE( file.write_2006_N42(output) );
+  const string xml = output.str();
+  CHECK( xml.find("safe&lt;/DetectorType&gt;&lt;ChannelData&gt;injected") != string::npos );
+  CHECK( xml.find("<DetectorType>safe</DetectorType><ChannelData>injected") == string::npos );
+}
+
+
+template<typename T>
+static void write_cam_test_value( vector<byte_type> &data, const size_t offset, const T value )
+{
+  REQUIRE( offset + sizeof(T) <= data.size() );
+  std::memcpy( data.data() + offset, &value, sizeof(T) );
+}
+
+
+static vector<byte_type> make_cam_geometry_security_test_input(
+    const uint16_t entry_size, const uint16_t record_size = 64, const uint16_t records = 1 )
+{
+  const size_t block_pos = 0x800;
+  const size_t data_size = block_pos + 0x30 + static_cast<size_t>(record_size) * records;
+  vector<byte_type> data( std::max(size_t(0x600), data_size), 0 );
+
+  write_cam_test_value<uint32_t>( data, 0x70,
+      static_cast<uint32_t>(CAMInputOutput::CAMIO::CAMBlock::GEOM) );
+  write_cam_test_value<uint32_t>( data, 0x70 + 0x0a, static_cast<uint32_t>(block_pos) );
+  write_cam_test_value<uint16_t>( data, block_pos + 0x04, 0x0700 );
+  write_cam_test_value<uint16_t>( data, block_pos + 0x10, 0x0030 );
+  write_cam_test_value<uint16_t>( data, block_pos + 0x1e, records );
+  write_cam_test_value<uint16_t>( data, block_pos + 0x20, record_size );
+  write_cam_test_value<uint16_t>( data, block_pos + 0x28, 0 );
+  write_cam_test_value<uint16_t>( data, block_pos + 0x2a, entry_size );
+  data[block_pos + 0x30] = 1;
+  return data;
+}
+
+
+TEST_CASE( "CAM geometry rejects non-advancing and undersized entries" )
+{
+  for( const uint16_t entry_size : {uint16_t(0), uint16_t(12)} )
+  {
+    CAMInputOutput::CAMIO reader;
+    reader.ReadFile( make_cam_geometry_security_test_input(entry_size) );
+    CHECK_THROWS( reader.GetEfficiencyPoints() );
+  }
+
+  CAMInputOutput::CAMIO excessive_reader;
+  const uint16_t entry_size = 13;
+  const uint16_t record_size = numeric_limits<uint16_t>::max();
+  const uint16_t records = 27;
+  auto excessive_input = make_cam_geometry_security_test_input(entry_size, record_size, records);
+  const size_t first_record = 0x800 + 0x30;
+  for( size_t record = 0; record < records; ++record )
+  {
+    const size_t start = first_record + record * static_cast<size_t>(record_size);
+    const size_t end = start + record_size;
+    for( size_t location = start; location + entry_size <= end; location += entry_size )
+      excessive_input[location] = static_cast<byte_type>(record + 1);
+  }
+  excessive_reader.ReadFile( excessive_input );
+  CHECK_THROWS( excessive_reader.GetEfficiencyPoints() );
+  CHECK_THROWS( excessive_reader.GetEfficiencyPoints() );
 }

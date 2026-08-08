@@ -1414,8 +1414,12 @@ bool SpecFile::load_from_spectraline_iec( std::istream &input )
         throw runtime_error( "Could not parse live/real/nchannels line" );
       live_time_val = nums[0];
       real_time_val = nums[1];
-      if( nums[2] > 0.0f && nums[2] < 1e7f )
-        declared_nchannels = static_cast<size_t>( nums[2] );
+      const float declared = nums[2];
+      if( !std::isfinite(declared) || declared < EnergyCalibration::sm_min_channels
+          || declared > EnergyCalibration::sm_max_channels
+          || std::floor(declared) != declared )
+        throw runtime_error( "Invalid IEC channel declaration" );
+      declared_nchannels = static_cast<size_t>( declared );
     }
 
     // Line 3: two datetimes "DD/MM/YY HH:MM:SS" each.
@@ -1499,9 +1503,9 @@ bool SpecFile::load_from_spectraline_iec( std::istream &input )
     // preceded by the starting channel number (6 numeric tokens per row).
     // Per spec the *last* record may have blank fields for channels in excess
     // of `declared_nchannels`, so accept partial last lines (2-6 tokens).
+    // `declared_nchannels` is in [sm_min_channels, sm_max_channels] - anything else threw above.
     auto channel_counts = std::make_shared<std::vector<float>>();
-    if( declared_nchannels > 0 )
-      channel_counts->reserve( declared_nchannels );
+    channel_counts->reserve( declared_nchannels );
     int last_seen_channel = -1;
     for( size_t i = 5; i < lines.size(); ++i )
     {
@@ -1523,9 +1527,12 @@ bool SpecFile::load_from_spectraline_iec( std::istream &input )
       // (last record per IEC 1455 §4.8).  Otherwise reject — this also
       // filters out the calibration-pair records (records 11-46) which have
       // 4 numeric tokens and would otherwise spoof a channel-0 partial row.
-      const bool reaches_end = (declared_nchannels > 0)
-        && (static_cast<size_t>(ch) + ncounts >= declared_nchannels);
+      const bool reaches_end = (static_cast<size_t>(ch) + ncounts >= declared_nchannels);
       if( !full_row && !reaches_end ) continue;
+      // The spectrum must begin at stored channel 0 and advance by 5 - otherwise
+      // `channel_counts[i]` would not correspond to channel `i`, and the record-4
+      // energy polynomial would be applied against shifted channel indices.
+      if( last_seen_channel < 0 && ch != 0 ) continue;
       if( last_seen_channel >= 0 && ch != last_seen_channel + 5 ) continue;
       last_seen_channel = ch;
       for( size_t j = 1; j < vals.size(); ++j )
@@ -1537,9 +1544,23 @@ bool SpecFile::load_from_spectraline_iec( std::istream &input )
     if( channel_counts->size() < 64 )
       throw runtime_error( "Too few channels parsed" );
 
-    // Trim any trailing channel rows beyond the declared channel count.
-    if( declared_nchannels > 0 && channel_counts->size() > declared_nchannels )
+    // Trim any trailing channel rows beyond the declared channel count.  This is
+    // the upper bound that keeps `channel_counts` within `sm_max_channels`.
+    if( channel_counts->size() > declared_nchannels )
       channel_counts->resize( declared_nchannels );
+
+    // Tolerate a spectrum shorter than declared (e.g. the file was truncated in
+    // transfer).  This is safe: every size downstream - `set_gamma_counts` and the
+    // record-4 polynomial - is derived from `channel_counts->size()`, never from
+    // `declared_nchannels`.  And since the data is required to start at channel 0
+    // and advance contiguously, the counts we do have still line up with their
+    // channel numbers; we are just missing the top of the spectrum.
+    if( channel_counts->size() < declared_nchannels )
+    {
+      meas_parse_warnings.push_back( "Spectrum declares " + std::to_string(declared_nchannels)
+        + " channels, but only " + std::to_string(channel_counts->size())
+        + " were found; the file appears truncated." );
+    }
 
     {
       // Placeholder cal so set_gamma_counts asserts pass; replaced below.
@@ -1590,7 +1611,6 @@ bool SpecFile::load_from_spectraline_iec( std::istream &input )
 }//bool load_from_spectraline_iec( std::istream &input );
 
 }//namespace SpecUtils
-
 
 
 

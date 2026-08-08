@@ -393,12 +393,6 @@ private:
     /** The most efficiency points a GEOM block can describe, bounded by its 32-bit size field. */
     static constexpr size_t sm_max_efficiency_points = 4080;
 
-    /** ENGCAL is a fixed four-float field at ACQP common offset 0x32E, and `GetEnergyCalibration()`
-     reads back exactly four - so `AddEnergyCalibration()` writes at most this many, and any beyond
-     are dropped rather than allowed to run into the fields that follow.
-     */
-    static constexpr size_t max_energy_cal_coefs = 4;
-
     // GEOM block geometry, taken from a real Genie-written block (the Ba-133 test file):
     //  commonFlag 0x0500, recOffset 32, entOffset 0x04B2, entSize 33, model name at recOffset+222.
     static constexpr uint16_t sm_geom_rec_offset = 32;
@@ -434,6 +428,12 @@ private:
     static constexpr size_t sec_header_length = 0x30;
     static constexpr uint16_t acqp_rec_tab_loc = 0x01FB;
 
+    /** Number of energy calibration coefficients CNF files hold.
+     ENGCAL is a fixed-size field of this many floats, starting at offset 0x32E of the ACQP
+     parameter section; the fields that follow it start immediately after.
+     */
+    static constexpr size_t max_energy_cal_coefs = 4;
+
     float key_line_intf_limit = 2.0; //keV
     bool sampBlock = false;
     bool specBlock = false;
@@ -463,6 +463,9 @@ public:
      */
     std::vector<Nuclide>& GetNuclides();
     std::vector<Peak>& GetPeaks();
+    /** Reads efficiency points from geometry records.
+     Throws for malformed record sizes or more than 131072 points; failures retain no partial data.
+     */
     std::vector<EfficiencyPoint>& GetEfficiencyPoints();
     /** The efficiency model named by the file; only valid once `GetEfficiencyPoints()` has been
      called - until then this returns `EfficiencyModel::NotReadin`.

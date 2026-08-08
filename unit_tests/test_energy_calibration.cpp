@@ -770,3 +770,57 @@ TEST_CASE( "testCachedSplinesLowerChannelEdge" )
   const double e = cal.energy_for_channel( 50.0 );
   CHECK( fabs( e - 150.0 ) < 0.001 );
 }//TEST_CASE( "testCachedSplinesLowerChannelEdge" )
+
+
+TEST_CASE( "Energy calibration rejects malformed channel maps without changing state" )
+{
+  EnergyCalibration calibration;
+  calibration.set_polynomial( 64, {0.0f, 1.0f}, {} );
+  const auto original_type = calibration.type();
+  const auto original_coefficients = calibration.coefficients();
+
+  CHECK_THROWS( calibration.set_full_range_fraction(64, {0.0f, 100.0f, -200.0f}, {}) );
+  CHECK( calibration.type() == original_type );
+  CHECK( calibration.coefficients() == original_coefficients );
+  CHECK_THROWS( fullrangefraction_binning(
+      {0.0f, std::numeric_limits<float>::infinity()}, 64, {}) );
+
+  const std::vector<std::vector<float>> invalid_edges = {
+    {0.0f, 1.0f, 1.0f},
+    {0.0f, std::numeric_limits<float>::quiet_NaN(), 2.0f},
+    {0.0f, std::numeric_limits<float>::infinity(), 2.0f},
+    {0.0f, -std::numeric_limits<float>::infinity(), 2.0f}
+  };
+  for( const auto &edges : invalid_edges )
+  {
+    CHECK_THROWS( calibration.set_lower_channel_energy(2, edges) );
+    auto moved_edges = edges;
+    CHECK_THROWS( calibration.set_lower_channel_energy(2, std::move(moved_edges)) );
+    CHECK( calibration.type() == original_type );
+    CHECK( calibration.coefficients() == original_coefficients );
+  }
+
+  const std::vector<float> overflowing_edges = {
+    0.0f, std::numeric_limits<float>::max()
+  };
+  CHECK_THROWS( calibration.set_lower_channel_energy(2, overflowing_edges) );
+  auto moved_overflowing_edges = overflowing_edges;
+  CHECK_THROWS( calibration.set_lower_channel_energy(2, std::move(moved_overflowing_edges)) );
+}
+
+
+TEST_CASE( "CALp detector names cannot inject records" )
+{
+  auto calibration = std::make_shared<EnergyCalibration>();
+  calibration->set_polynomial( 64, {0.0f, 1.0f}, {} );
+  for( const std::string &name : {"bad\n#END", "bad\r#END", "bad\r\n#END", "bad\n\r#END"} )
+  {
+    std::ostringstream output;
+    CHECK_THROWS( write_CALp_file(output, calibration, name) );
+    CHECK( output.str().empty() );
+  }
+
+  std::ostringstream output;
+  CHECK( write_CALp_file(output, calibration, "Detector A") );
+  CHECK( output.str().find("Detector A") != std::string::npos );
+}

@@ -166,27 +166,39 @@
       ];
 
       var tbody = document.querySelector('#info-table tbody');
-      tbody.innerHTML = '';
+      tbody.replaceChildren();
       for (var i = 0; i < rows.length; i++) {
         var tr = document.createElement('tr');
-        tr.innerHTML = '<th>' + rows[i][0] + '</th><td>' + rows[i][1] + '</td>';
+        var th = document.createElement('th');
+        var td = document.createElement('td');
+        th.textContent = rows[i][0];
+        td.textContent = rows[i][1];
+        tr.appendChild(th);
+        tr.appendChild(td);
         tbody.appendChild(tr);
       }
 
       // Measurements table
       var measBody = document.querySelector('#meas-table tbody');
-      measBody.innerHTML = '';
+      measBody.replaceChildren();
       for (var si = 0; si < info.samples.length; si++) {
         for (var di = 0; di < info.gammaDetectors.length; di++) {
           var minfo = api.getMeasurementInfo(info.samples[si], info.gammaDetectors[di]);
           if (!minfo || minfo.numChannels === 0) continue;
           var tr = document.createElement('tr');
-          tr.innerHTML = '<td>' + minfo.sampleNumber + '</td>' +
-            '<td>' + minfo.detectorName + '</td>' +
-            '<td>' + minfo.numChannels + '</td>' +
-            '<td>' + minfo.liveTime.toFixed(2) + ' s</td>' +
-            '<td>' + minfo.realTime.toFixed(2) + ' s</td>' +
-            '<td>' + minfo.gammaCountSum.toLocaleString() + '</td>';
+          var values = [
+            minfo.sampleNumber,
+            minfo.detectorName,
+            minfo.numChannels,
+            minfo.liveTime.toFixed(2) + ' s',
+            minfo.realTime.toFixed(2) + ' s',
+            minfo.gammaCountSum.toLocaleString()
+          ];
+          for (var vi = 0; vi < values.length; vi++) {
+            var td = document.createElement('td');
+            td.textContent = values[vi];
+            tr.appendChild(td);
+          }
           measBody.appendChild(tr);
         }
       }

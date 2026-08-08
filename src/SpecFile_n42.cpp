@@ -9646,7 +9646,8 @@ namespace SpecUtils
     }//switch( source_type_ )
     
     if( !detector_description_.empty() )
-      ostr << "      <DetectorType>" << detector_description_ << "</DetectorType>" << endline;
+      ostr << "      <DetectorType>" << xml_escape(detector_description_)
+           << "</DetectorType>" << endline;
     
     ostr << "      <Calibration Type=\"Energy\" EnergyUnits=\"keV\">" << endline
          << "        <Equation Model=\"";
@@ -9899,6 +9900,5 @@ namespace SpecUtils
       
   }//set_info_from_2006_N42_spectrum_node(...)
 }//namespace SpecUtils
-
 
 
