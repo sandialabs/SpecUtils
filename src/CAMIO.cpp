@@ -128,32 +128,34 @@ const std::array<byte_type, 0x7D0> procCommon = { 0 }; // Initialize with zeros
 
 
 // Helper function to convert half-life units
-static void ConvertHalfLife(CAMInputOutput::Nuclide& nuc) {
-    std::string unit = nuc.HalfLifeUnit;
+/** Returns how many seconds one of the given CAM half-life unit is.
+
+ Genie pads this field out with spaces (real files give "Y ", "D ", "H ", "S "), and the case is
+ not consistent, so the comparison is done on an upper-cased copy truncated at the first space.
+ Reader and writer share this so their unit tables cannot drift apart - they did, and the writer's
+ untrimmed comparison rejected every nuclide the reader produces.
+
+ Throws if the unit isnt one of y, d, h, m or s.
+ */
+static double half_life_unit_to_seconds(const std::string& unit_str) {
+    std::string unit = unit_str;
     std::transform(unit.begin(), unit.end(), unit.begin(), ::toupper);
     unit = unit.substr(0, unit.find_first_of(' '));
 
-    if (unit == "Y") {
-        nuc.HalfLife /= 31557600;
-        nuc.HalfLifeUncertainty /= 31557600;
-    }
-    else if (unit == "D") {
-        nuc.HalfLife /= 86400;
-        nuc.HalfLifeUncertainty /= 86400;
-    } 
-    else if (unit == "H") {
-        nuc.HalfLife /= 3600;
-        nuc.HalfLifeUncertainty /= 3600;
-    } 
-    else if (unit == "M") {
-        nuc.HalfLife /= 60;
-        nuc.HalfLifeUncertainty /= 60;
-    } 
-    else if (unit == "S") {
-        // Already in seconds
-    } else {
-        throw std::runtime_error("Half Life Unit " + unit + " not recognized");
-    }
+    if (unit == "Y") return 31557600.0;  //Julian year = 365.25 days
+    if (unit == "D") return 86400.0;
+    if (unit == "H") return 3600.0;
+    if (unit == "M") return 60.0;
+    if (unit == "S") return 1.0;
+
+    throw std::runtime_error("Half Life Unit " + unit + " not recognized");
+}
+
+static void ConvertHalfLife(CAMInputOutput::Nuclide& nuc) {
+    // The file stores seconds; `Nuclide::HalfLife` is in `HalfLifeUnit`.
+    const double seconds_per_unit = half_life_unit_to_seconds(nuc.HalfLifeUnit);
+    nuc.HalfLife /= seconds_per_unit;
+    nuc.HalfLifeUncertainty /= seconds_per_unit;
 }
 
 static std::vector<std::string> DecomposeIsotopeName(const std::string& name)
@@ -1643,6 +1645,11 @@ std::vector<byte_type>& CAMIO::CreateFile() {
         auto peakBlockData = GeneratePeakBlock(loc);
         blockList.push_back(peakBlockData);
         loc += peakBlockData.size();
+
+        // A PEAK block is only meaningful alongside the DISP block naming its ROIs.
+        auto dispBlockData = GenerateDispBlock(loc);
+        blockList.push_back(dispBlockData);
+        loc += dispBlockData.size();
     }
 
     // NLINES/NUCL records can span several blocks, and each block in such a chain points at the
@@ -1790,6 +1797,14 @@ void CAMIO::GenerateFile(const std::vector<std::vector<byte_type>>& blocks) {
         // Copy block header into the file header
         std::copy(block.begin(), block.begin() + 0x30, writebytes.begin() + headerDestStart);
 
+        // The directory entry is otherwise a verbatim copy of the block's header, but Genie clears
+        //  bit 0x0400 of the common flag in the directory: a block with 0x0500 (has a common
+        //  section) or 0x0700 (a continuation block) is listed as 0x0100 or 0x0300.  This holds
+        //  for every block of every Genie-written file checked.
+        const uint16_t commonFlag = ReadUInt16(block, 0x04);
+        const uint16_t dirFlag = static_cast<uint16_t>( commonFlag & ~uint16_t(0x0400) );
+        std::memcpy( &writebytes[headerDestStart + 0x04], &dirFlag, sizeof(dirFlag) );
+
         // Copy the block to its location in the file.
         // Note: we use block.size() rather than the uint16_t block-size field at offset 0x06,
         //  because for SPEC blocks with many channels, the actual size can exceed 65535 bytes,
@@ -1822,29 +1837,16 @@ void CAMIO::AddNuclide(const Nuclide& nuc) {
         nucs.clear();
     }
 
-    // Convert half life into seconds
-    double halfLife = nuc.HalfLife;
-    double halfLifeUnc = nuc.HalfLifeUncertainty;
-    std::string unit = nuc.HalfLifeUnit;
-    std::transform(unit.begin(), unit.end(), unit.begin(), ::toupper);
+    // `Nuclide::HalfLife` is in `HalfLifeUnit`, but the record holds a CAM duration, which is
+    //  always seconds - so convert here.  The unit *string* still goes out unmodified (it is
+    //  written at record offset 0x61), so `ConvertHalfLife()`'s divide undoes this on read.
+    //  This conversion used to be computed and then thrown away, writing e.g. Cs-137's half-life
+    //  as 30.07 seconds rather than 30.07 years.
+    const double seconds_per_unit = half_life_unit_to_seconds(nuc.HalfLifeUnit);
 
-    if (unit == "Y") {
-        halfLife *= 31557600;
-        halfLifeUnc *= 31557600;
-    } else if (unit == "D") {
-        halfLife *= 86400;
-        halfLifeUnc *= 86400;
-    } else if (unit == "H") {
-        halfLife *= 3600;
-        halfLifeUnc *= 3600;
-    } else if (unit == "M") {
-        halfLife *= 60;
-        halfLifeUnc *= 60;
-    } else if (unit == "S") {
-        // Already in seconds
-    } else {
-        throw std::runtime_error("Half Life Unit not recognized");
-    }
+    Nuclide nuc_in_seconds = nuc;
+    nuc_in_seconds.HalfLife = static_cast<float>( nuc.HalfLife * seconds_per_unit );
+    nuc_in_seconds.HalfLifeUncertainty = static_cast<float>( nuc.HalfLifeUncertainty * seconds_per_unit );
 
     int nucNo = nuc.Index;
 
@@ -1860,7 +1862,7 @@ void CAMIO::AddNuclide(const Nuclide& nuc) {
 
     std::sort(lineNums.begin(), lineNums.end());
 
-    std::vector<uint8_t> nucBytes = GenerateNuclide(nuc, lineNums);
+    std::vector<uint8_t> nucBytes = GenerateNuclide(nuc_in_seconds, lineNums);
     nucs.push_back(nucBytes);
 
 }
@@ -1945,11 +1947,19 @@ void CAMInputOutput::CAMIO::AddEnergyCalibration(const std::vector<float> coeffi
     enter_CAM_value(1.0, acqpCommon,  0x312, cam_type::cam_float);
     //check if there is energy calibration infomation
     if (!coefficients.empty()) {
-        for (size_t i = 0; i < coefficients.size(); i++)
+        // ENGCAL is a fixed four-float field at 0x32E.  The loop here used to be unbounded, so a
+        //  caller passing more (write_cnf hands `calibration_coeffs()` straight through, and
+        //  nothing upstream caps the count) silently overwrote whatever followed: the "keV" units
+        //  string at 0x346 from the 7th coefficient, FWHMOFF/FWHMSLOPE from the 40th, the "SQRT"
+        //  string and the coefficient count from the 79th.  `enter_CAM_value` bounds-checks, so it
+        //  was corruption rather than a memory error, and only threw past 297 coefficients.
+        //  `GetEnergyCalibration()` reads back exactly four, so more could never round-trip.
+        const size_t num_coefs = std::min( coefficients.size(), max_energy_cal_coefs );
+        for (size_t i = 0; i < num_coefs; i++)
         {
             enter_CAM_value(coefficients[i], acqpCommon, 0x32E + i * 0x4, cam_type::cam_float);
         }
-        enter_CAM_value(coefficients.size(), acqpCommon, 0x46C, cam_type::cam_word);
+        enter_CAM_value(num_coefs, acqpCommon, 0x46C, cam_type::cam_word);
         enter_CAM_value(03, acqpCommon, 0x32A, cam_type::cam_longword); //ECALFLAGS set to energy and shape calibration
     }
     else
@@ -2204,10 +2214,92 @@ std::vector<uint8_t> CAMIO::GeneratePeakBlock(size_t loc)
         const uint16_t width = static_cast<uint16_t>( std::min(width_int, 0xFFFF) );
         enter_CAM_value( left, block, recPos + static_cast<size_t>(PeakParameterLocation::LeftChannel), cam_type::cam_longword );
         enter_CAM_value( width, block, recPos + static_cast<size_t>(PeakParameterLocation::Width), cam_type::cam_word );
+
+        // Fields Genie fills on every peak of every file checked, but that are not simply more of
+        //  the peak's fitted quantities:
+        //  - the area and its uncertainty appear a second time, verbatim;
+        //  - a flag distinguishing a peak fitted alone in its ROI from one of a multiplet;
+        //  - the name of the fit engine.
+        //  Genie also stores the peak's efficiency at 0x38 (and again at 0xBD); we have no
+        //  per-peak efficiency to put there, so those are left zero.
+        enter_CAM_value( p.Area, block,
+                        recPos + static_cast<size_t>(PeakParameterLocation2::AreaAgain), cam_type::cam_float );
+        enter_CAM_value( p.AreaUncertainty, block,
+                        recPos + static_cast<size_t>(PeakParameterLocation2::AreaUncertaintyAgain), cam_type::cam_float );
+
+        //  Compare the same clamped channel numbers `GenerateDispBlock()` groups on, so a peak is
+        //  never flagged as a singlet while DISP counts it in a multi-peak region.
+        const bool in_multiplet = (std::count_if( begin(writePeaks), end(writePeaks),
+            [left,&p]( const Peak &o ){
+                return (static_cast<uint16_t>(std::max(0, std::min(o.LeftChannel, 0xFFFF))) == static_cast<uint16_t>(left))
+                       && (o.RightChannel == p.RightChannel);
+            } ) > 1);
+        block[recPos + static_cast<size_t>(PeakParameterLocation2::MultipletFlag)] = in_multiplet ? 0xD8 : 0x10;
+
+        const char * const engine = "PANOLIN1S";
+        std::memcpy( &block[recPos + static_cast<size_t>(PeakParameterLocation2::FitEngineName)],
+                     engine, std::strlen(engine) );
     }//for( loop over peaks )
 
     return block;
 }//GeneratePeakBlock(...)
+
+
+std::vector<uint8_t> CAMIO::GenerateDispBlock(size_t loc)
+{
+    // One record per distinct peak channel range, in the order the peaks appear - matching every
+    //  Genie file checked, where the DISP regions are exactly the distinct (LeftChannel,
+    //  RightChannel) pairs of the PEAK records, in the same order.
+    struct Region { uint16_t left, right, num_peaks; };
+    std::vector<Region> regions;
+    for( const Peak &p : writePeaks )
+    {
+        const uint16_t left = static_cast<uint16_t>( std::max(0, std::min(p.LeftChannel, 0xFFFF)) );
+        const uint16_t right = static_cast<uint16_t>( std::max(0, std::min(p.RightChannel, 0xFFFF)) );
+
+        const auto pos = std::find_if( begin(regions), end(regions), [left,right]( const Region &r ){
+            return (r.left == left) && (r.right == right);
+        } );
+
+        if( pos != end(regions) )
+            pos->num_peaks += 1;
+        else
+            regions.push_back( Region{ left, right, 1 } );
+    }//for( const Peak &p : writePeaks )
+
+    if( regions.size() > 0xFFFF )
+      throw std::invalid_argument( "GenerateDispBlock: too many regions ("
+                                   + std::to_string(regions.size()) + ")" );
+
+    const uint16_t numRegions = static_cast<uint16_t>( regions.size() );
+    const size_t recStart = static_cast<size_t>(block_header_size) + static_cast<size_t>(sm_disp_rec_offset);
+    const size_t usedSize = recStart + static_cast<size_t>(sm_disp_rec_size) * numRegions;
+    const size_t blockSize = std::max<size_t>( sm_genie_disp_block_size,
+                                               ((usedSize + 0x1FF) / 0x200) * 0x200 );
+
+    std::vector<uint8_t> block(blockSize, 0);
+
+    const std::vector<uint8_t> header = GenerateBlockHeader(CAMBlock::DISP, loc, numRegions, 0, 0, true);
+    if( header.size() > block.size() )
+      throw std::out_of_range( "GenerateDispBlock: header larger than block" );
+    std::copy(header.begin(), header.end(), block.begin());
+
+    for( size_t i = 0; i < regions.size(); ++i )
+    {
+        const size_t recPos = recStart + i * static_cast<size_t>(sm_disp_rec_size);
+        if( (recPos + sm_disp_rec_size) > block.size() )
+          throw std::out_of_range( "GenerateDispBlock: record destination out of bounds" );
+
+        const Region &r = regions[i];
+        enter_CAM_value( sm_disp_rec_size, block, recPos + 0x00, cam_type::cam_word );
+        block[recPos + 0x02] = 0x01;
+        block[recPos + 0x03] = static_cast<uint8_t>( std::min<uint16_t>(r.num_peaks, 0xFF) );
+        enter_CAM_value( r.left, block, recPos + 0x04, cam_type::cam_word );
+        enter_CAM_value( r.right, block, recPos + 0x06, cam_type::cam_word );
+    }//for( loop over regions )
+
+    return block;
+}//GenerateDispBlock(...)
 
 
 // Add the count start time
@@ -2653,9 +2745,41 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
     // Modify values based on block type
     switch (block) {
       case CAMBlock::ACQP:
-      case CAMBlock::DISP:
-        // No action
+      case CAMBlock::ENERGY_CAL_METHOD:
+      case CAMBlock::ENERGY_CAL_METHOD2:
+      case CAMBlock::ANALYSIS_SEQUENCE:
+      case CAMBlock::K_EDGE_CONFIG:
+        // No action - we do not write these.  Listed explicitly (rather than via a `default:`) so
+        //  that adding a new block type keeps producing a -Wswitch warning here.
         break;
+
+        case CAMBlock::DISP:
+        {
+            // Values from the DISP block of Genie-produced CNFs (cs137.CNF, Ba-133.cnf and
+            //  example_peaks_fits.cnf), which agree on all of it.  `numRec` is the ROI count.
+            values[0] = 0x0500;             // commonFlag
+            values[5] = 0xF628;             // \ block-type descriptor, as for PEAK
+            values[6] = 0x000C;             // /
+            values[7] = 0x1200;
+            values[11] = numRec;            // number of regions
+            values[12] = sm_disp_rec_size;
+            values[13] = sm_disp_rec_offset;
+            values[14] = 0x7FFF;
+            values[15] = 0x0000;
+            values[16] = 0x0002;
+            values[17] = 0x000C;
+
+            const uint32_t usedSize = static_cast<uint32_t>(values[4]) +
+                                       static_cast<uint32_t>(sm_disp_rec_offset) +
+                                       static_cast<uint32_t>(sm_disp_rec_size) * numRec;
+            const uint32_t totalSize = std::max<uint32_t>(
+                                        static_cast<uint32_t>(sm_genie_disp_block_size),
+                                        ((usedSize + 0x1FFu) / 0x200u) * 0x200u );
+            values[1] = static_cast<uint16_t>(totalSize & 0xFFFF);
+            values[2] = static_cast<uint16_t>((totalSize >> 16) & 0xFFFF);
+            values[19] = static_cast<uint16_t>(usedSize & 0xFFFF);
+            break;
+        }
 
         case CAMBlock::PEAK:
         {

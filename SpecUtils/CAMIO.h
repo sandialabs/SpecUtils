@@ -103,8 +103,16 @@ struct Peak {
 
 struct Nuclide {
     std::string Name;
+    /** Half-life, expressed in `HalfLifeUnit` - NOT seconds.  The file itself stores seconds; the
+     reader divides by the unit and the writer multiplies back, so a value read out of a file can
+     be handed straight back to `AddNuclide(...)`.
+     */
     float HalfLife = 0.;
+    /** Uncertainty on `HalfLife`, in the same units as it. */
     float HalfLifeUncertainty = 0.;
+    /** One of "y", "d", "h", "m" or "s" - the unit `HalfLife` is in.  Case-insensitive, and Genie
+     pads it with spaces ("Y "), so compare via `half_life_unit_to_seconds()` rather than directly.
+     */
     std::string HalfLifeUnit;
     int Index = -1;
     int AtomicNumber = 0;
@@ -200,6 +208,35 @@ public:
         PEAK = 0x00012006,
         NUCL = 0x00012007,
         NLINES = 0x00012008,
+
+        /** Energy-calibration provenance.  Two blocks that carry the same two strings, in opposite
+         order: the calibration method ("Gamma Encal v2.2" when Genie fit it, "Manual Coefs." when
+         coefficients were typed in) and, for a manual calibration, THE OPERATOR'S NAME.  Both sit
+         at block offset 0x30, 16 bytes each, and both have `numRec` calibration points (0 for a
+         manual calibration).  We do not write either block.
+
+         Worth knowing when handling user files: these, and the SAMP block, mean a Genie CNF can
+         carry a person's name.
+         */
+        ENERGY_CAL_METHOD = 0x0001200D,
+        ENERGY_CAL_METHOD2 = 0x00012013,
+
+        /** The analysis sequence record: what Genie actually ran, and with what inputs.
+
+         `numRec` 217-byte records, one per analysis step, each naming its engine at record offset
+         0x31 - e.g. PLUNID (peak locate + nuclide ID), PANOLIN1 (peak analysis; the same name each
+         PEAK record carries at 0x98), ARBACK (background subtract), ECEFCOR (efficiency
+         correction), ACINTERF (interference correction), RPSTD (standard report), NID_Intf.
+
+         The block's common area holds the paths those steps used: the analysis template
+         (`...\CTLFILES\ANALYSIS.TPL`), the nuclide libraries (`...\CAMFILES\STDLIB.NLB`), the
+         background spectrum, and report section names ("HEADER", "PeakEff").  A file that had a
+         full analysis run has 5-7 records; one that only had a peak search has none.
+
+         Also a privacy note: these paths are absolute paths off the analyst's machine.
+         */
+        ANALYSIS_SEQUENCE = 0x00012010,
+
         K_EDGE_CONFIG = 0x00012024  // K-edge configuration block
     };
 
@@ -267,7 +304,20 @@ public:
         LineActivityUnceratinty = 0x13,
         LineEfficiency = 0x31,
         LineEfficiencyUncertainty = 0x35,
-        LineMDA = 0x25, 
+        LineMDA = 0x25,
+    };
+
+    enum class PeakParameterLocation2 : uint8_t {
+        /** 0x10 for a peak fitted alone in its ROI, 0xD8 for one of several peaks sharing a ROI.
+         Holds without exception across every peak of every Genie file checked.
+         */
+        MultipletFlag = 0x29,
+        /** A verbatim second copy of `Area` (0x34); Genie writes both on every peak. */
+        AreaAgain = 0x8C,
+        /** A verbatim second copy of `AreaUncertainty` (0x84). */
+        AreaUncertaintyAgain = 0x90,
+        /** Name of the fit engine that produced the peak, e.g. "PANOLIN1S"; 16 bytes. */
+        FitEngineName = 0x98,
     };
 
     enum class EfficiencyModel : uint8_t
@@ -343,6 +393,12 @@ private:
     /** The most efficiency points a GEOM block can describe, bounded by its 32-bit size field. */
     static constexpr size_t sm_max_efficiency_points = 4080;
 
+    /** ENGCAL is a fixed four-float field at ACQP common offset 0x32E, and `GetEnergyCalibration()`
+     reads back exactly four - so `AddEnergyCalibration()` writes at most this many, and any beyond
+     are dropped rather than allowed to run into the fields that follow.
+     */
+    static constexpr size_t max_energy_cal_coefs = 4;
+
     // GEOM block geometry, taken from a real Genie-written block (the Ba-133 test file):
     //  commonFlag 0x0500, recOffset 32, entOffset 0x04B2, entSize 33, model name at recOffset+222.
     static constexpr uint16_t sm_geom_rec_offset = 32;
@@ -361,6 +417,17 @@ private:
      them - do not derive them from the name offsets, the first name has no timestamp before it.
      */
     static constexpr size_t sm_genie_peak_time_offsets[2] = { 0x8D, 0xB9 };
+
+    /** DISP block geometry, again from the Genie-written files, which all agree.
+
+     The DISP block is the region-of-interest list that goes with a PEAK block: one 16-byte record
+     per ROI, holding the ROI's channel range and how many peaks sit in it (so a doublet is one
+     DISP record referencing two PEAK records).  Genie appears to need it to make sense of a PEAK
+     block - peaks written without it are ignored.
+     */
+    static constexpr uint16_t sm_disp_rec_size = 0x0010;
+    static constexpr uint16_t sm_disp_rec_offset = 0x019C;
+    static constexpr size_t sm_genie_disp_block_size = 0x0E00;
 
     static constexpr uint8_t  nuclide_line_size = 0x03;
     static constexpr size_t file_header_length = 0x800;
@@ -556,6 +623,12 @@ protected:
     void AssignKeyLines();
     std::vector<uint8_t> GenerateGeometryBlock(size_t loc);
     std::vector<uint8_t> GeneratePeakBlock(size_t loc);
+
+    /** The ROI list that accompanies `GeneratePeakBlock()`; see `sm_disp_rec_size`.  ROIs are
+     taken from `writePeaks` by grouping peaks that share a channel range, so a doublet fitted in
+     one region yields one DISP record saying two peaks are in it.
+     */
+    std::vector<uint8_t> GenerateDispBlock(size_t loc);
 
 protected:
     // Add block reading function declarations
