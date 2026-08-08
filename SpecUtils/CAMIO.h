@@ -271,6 +271,12 @@ private:
     static constexpr size_t sec_header_length = 0x30;
     static constexpr uint16_t acqp_rec_tab_loc = 0x01FB;
 
+    /** Number of energy calibration coefficients CNF files hold.
+     ENGCAL is a fixed-size field of this many floats, starting at offset 0x32E of the ACQP
+     parameter section; the fields that follow it start immediately after.
+     */
+    static constexpr size_t max_energy_cal_coefs = 4;
+
     float key_line_intf_limit = 2.0; //keV
     bool sampBlock = false;
     bool specBlock = false;
@@ -283,6 +289,9 @@ public:
     std::vector<Line>& GetLines();
     std::vector<Nuclide>& GetNuclides();
     std::vector<Peak>& GetPeaks();
+    /** Reads efficiency points from geometry records.
+     Throws for malformed record sizes or more than 131072 points; failures retain no partial data.
+     */
     std::vector<EfficiencyPoint>& GetEfficiencyPoints();
     /** Only valid after `GetEfficiencyPoints()` has been called (will be `EfficiencyModel::NotReadin` in this case) */
     EfficiencyModel GetEfficiencyModel() const;

@@ -775,6 +775,18 @@ void CAMIO::ReadGeometryBlock(size_t pos, uint16_t records) {
     uint16_t entSize = ReadUInt16(*readData, pos + 0x2a);
     uint16_t headSize = ReadUInt16(*readData, pos + 0x10);
 
+    const size_t pointSize = std::max({
+        static_cast<size_t>(EfficiencyPointParameterLocation::Energy) + 4,
+        static_cast<size_t>(EfficiencyPointParameterLocation::Efficiency) + 4,
+        static_cast<size_t>(EfficiencyPointParameterLocation::EfficiencyUncertainty) + 4
+    });
+    static constexpr size_t maxEfficiencyPoints = 131072;
+
+    if( records > 0 && recSize == 0 )
+      throw std::runtime_error( "ReadGeometryBlock: record size cannot be zero" );
+    if( records > 0 && entSize < pointSize )
+      throw std::runtime_error( "ReadGeometryBlock: efficiency entry size is too small" );
+
     if( (pos + recOffset + 222 + 8) <= readData->size() )
     {
       std::string type_str( 9, '\0');
@@ -802,9 +814,20 @@ void CAMIO::ReadGeometryBlock(size_t pos, uint16_t records) {
         if( (recSize > 0) && (i > (std::numeric_limits<size_t>::max() / recSize)) )
           throw std::out_of_range( "ReadGeometryBlock: record index * recSize would overflow" );
 
-        // Use explicit size_t casts to avoid uint16_t overflow in offset calculation
-        size_t loc = pos + static_cast<size_t>(headSize) + static_cast<size_t>(recOffset) +
-                     static_cast<size_t>(entOffset) + (i * static_cast<size_t>(recSize));
+        const size_t recordOffset = i * static_cast<size_t>(recSize);
+        const size_t fixedOffset = static_cast<size_t>(headSize)
+                                   + static_cast<size_t>(recOffset);
+        if( fixedOffset > readData->size() || pos > readData->size() - fixedOffset
+            || recordOffset > readData->size() - pos - fixedOffset )
+          break;
+
+        const size_t recordStart = pos + fixedOffset + recordOffset;
+        const size_t recordBytes = std::min(static_cast<size_t>(recSize),
+                                            readData->size() - recordStart);
+        const size_t recordEnd = recordStart + recordBytes;
+        if( entOffset > recordBytes )
+          throw std::runtime_error( "ReadGeometryBlock: entry offset exceeds record size" );
+        size_t loc = recordStart + static_cast<size_t>(entOffset);
 
         // Validate that loc is within bounds before entering loop
         if( loc >= readData->size() )
@@ -812,14 +835,13 @@ void CAMIO::ReadGeometryBlock(size_t pos, uint16_t records) {
 
         // Loop through the entries
         // Each entry starts with a byte that matches the record number (1-based)
-        while (loc < readData->size() && (*readData)[loc] == static_cast<uint8_t>(i + 1)) {
-            // Validate bounds before calling convert functions
-            const size_t maxParamOffset = std::max({
-                static_cast<size_t>(EfficiencyPointParameterLocation::Energy) + 4,
-                static_cast<size_t>(EfficiencyPointParameterLocation::Efficiency) + 4,
-                static_cast<size_t>(EfficiencyPointParameterLocation::EfficiencyUncertainty) + 4
-            });
-            validate_bounds( *readData, loc, maxParamOffset, "ReadGeometryBlock: reading efficiency point" );
+        while (loc < recordEnd && (*readData)[loc] == static_cast<uint8_t>(i + 1)) {
+            if( pointSize > recordEnd - loc )
+              throw std::runtime_error( "ReadGeometryBlock: truncated efficiency point" );
+            validate_bounds( *readData, loc, pointSize, "ReadGeometryBlock: reading efficiency point" );
+
+            if( efficiencyPoints.size() >= maxEfficiencyPoints )
+              throw std::runtime_error( "ReadGeometryBlock: too many efficiency points" );
 
             EfficiencyPoint point{};
             point.Index = static_cast<int>(i);
@@ -828,7 +850,9 @@ void CAMIO::ReadGeometryBlock(size_t pos, uint16_t records) {
             point.EfficiencyUncertainty = convert_from_CAM_float(*readData, loc + static_cast<uint32_t>(EfficiencyPointParameterLocation::EfficiencyUncertainty));
 
             efficiencyPoints.push_back(point);
-            loc += entSize;
+            // `entSize >= pointSize` is checked above, and `loc < recordEnd <= readData->size()`,
+            //  so this always advances and cannot wrap.
+            loc += static_cast<size_t>(entSize);
         }
     }
 }
@@ -1546,7 +1570,7 @@ std::vector<float>& CAMIO::GetEnergyCalibration() {
         throw std::runtime_error("There is no calibration data in the loaded file");
     }
 
-    fileEneCal.resize(4);
+    fileEneCal.resize(max_energy_cal_coefs);
 
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
@@ -1862,11 +1886,17 @@ void CAMInputOutput::CAMIO::AddEnergyCalibration(const std::vector<float> coeffi
     enter_CAM_value(1.0, acqpCommon,  0x312, cam_type::cam_float);
     //check if there is energy calibration infomation
     if (!coefficients.empty()) {
-        for (size_t i = 0; i < coefficients.size(); i++)
+        // ENGCAL is a fixed four-float field starting at 0x32E; writing more than this walks into
+        //  the fields that follow it (e.g. the "keV" units string at 0x346, FWHMOFF at 0x3C6, and
+        //  the coefficient count at 0x46C), so drop any higher-order terms.  GetEnergyCalibration()
+        //  only ever reads four coefficients back, so they couldnt round-trip anyway.
+        const size_t num_coefs = std::min(coefficients.size(), size_t(max_energy_cal_coefs));
+
+        for (size_t i = 0; i < num_coefs; i++)
         {
             enter_CAM_value(coefficients[i], acqpCommon, 0x32E + i * 0x4, cam_type::cam_float);
         }
-        enter_CAM_value(coefficients.size(), acqpCommon, 0x46C, cam_type::cam_word);
+        enter_CAM_value(num_coefs, acqpCommon, 0x46C, cam_type::cam_word);
         enter_CAM_value(03, acqpCommon, 0x32A, cam_type::cam_longword); //ECALFLAGS set to energy and shape calibration
     }
     else
@@ -2154,11 +2184,17 @@ std::vector<EfficiencyPoint>& CAMIO::GetEfficiencyPoints() {
     // Clear any existing points
     efficiencyPoints.clear();
 
-    // Read the geometry block which will populate efficiencyPoints
-    for (auto& it = range.first; it != range.second; ++it) {
-        size_t pos = it->second;
-        uint16_t records = ReadUInt16(*readData, pos + 0x1E);
-        ReadGeometryBlock(pos, records);
+    // Read the geometry block which will populate efficiencyPoints. Keep failure transactional so
+    // callers never observe a partially parsed calibration after a malformed block.
+    try {
+        for (auto& it = range.first; it != range.second; ++it) {
+            size_t pos = it->second;
+            uint16_t records = ReadUInt16(*readData, pos + 0x1E);
+            ReadGeometryBlock(pos, records);
+        }
+    } catch (...) {
+        efficiencyPoints.clear();
+        throw;
     }
 
     return efficiencyPoints;
@@ -2322,7 +2358,10 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
       case CAMBlock::GEOM:
       case CAMBlock::DISP:
       case CAMBlock::PEAK:
-        // No action
+      case CAMBlock::K_EDGE_CONFIG:
+        // No action - we dont generate these blocks (other than ACQP), so they just get the
+        //  ACQP defaults above.  Note there is intentionally no `default:` case, so that adding
+        //  a new CAMBlock gives a compiler warning here.
         break;
 
         case CAMBlock::PROC:

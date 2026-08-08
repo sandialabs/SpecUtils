@@ -75,6 +75,10 @@ Once you do this, you can run a fuzz job, use a command like:
 
 
 ./fuzz_test/fuzz_str_utils
+
+# The CNF/CAM reader and writer.  Its corpus should be a directory of only `.cnf` files, since
+#  every input is handed straight to `CAMInputOutput::CAMIO::ReadFile(...)`.
+./fuzz_test/fuzz_cam_io CNF_CORPUS_DIR -max_len=2621440 -jobs=8 -rss_limit_mb=4096 -max_total_time=300
 ```
 
 Since files are written to your CORPUS_DIR, you probably want to make a copy of the directory, before running.
