@@ -683,3 +683,69 @@ TEST_CASE( "CAM geometry rejects non-advancing and undersized entries" )
   CHECK_THROWS( excessive_reader.GetEfficiencyPoints() );
   CHECK_THROWS( excessive_reader.GetEfficiencyPoints() );
 }
+
+
+TEST_CASE( "CAM energy calibration is clamped to the four ENGCAL coefficients" )
+{
+  // ENGCAL is four floats at offset 0x32E of the ACQP parameter section, and the fields that
+  //  follow start immediately after, so an unclamped write corrupts them.  Ten coefficients, not
+  //  six: 0x32E + 6*4 == 0x346, so the SEVENTH is the first to land on the "keV" units string -
+  //  six only writes into the eight bytes between ENGCAL and it.
+  const vector<float> four_coefs = { 1.0f, 3.0f, 0.001f, 0.0f };
+  vector<float> ten_coefs = four_coefs;
+  while( ten_coefs.size() < 10 )
+    ten_coefs.push_back( 9.0f );
+
+  const auto write_file = []( const vector<float> &coefs ) -> vector<byte_type> {
+    CAMInputOutput::CAMIO writer;
+    writer.AddEnergyCalibration( coefs );
+    writer.AddSpectrum( vector<uint32_t>( 128, 5 ) );
+    return writer.CreateFile();
+  };
+
+  const vector<byte_type> baseline = write_file( four_coefs );
+  const vector<byte_type> excessive = write_file( ten_coefs );
+
+  // Deliberately NOT asserting on the coefficients that come back: GetEnergyCalibration() only
+  //  ever reads the four floats at 0x32E, which the overflow never touches, so such a check
+  //  passes with the bug present.
+  const auto count_occurrences = []( const vector<byte_type> &data, const char * const text ) {
+    const size_t len = strlen( text );
+    size_t count = 0;
+    for( size_t i = 0; (i + len) <= data.size(); ++i )
+      count += (memcmp( data.data() + i, text, len ) == 0);
+    return count;
+  };
+
+  // The "keV" units string survives - it goes to zero occurrences with the clamp lifted.
+  CHECK( count_occurrences( baseline, "keV" ) == 1 );
+  CHECK( count_occurrences( excessive, "keV" ) == 1 );
+
+  // ...as does the coefficient count word at 0x46C of the ACQP parameter section, which was
+  //  written as the full input size rather than what actually fit.
+  const auto acqp_count_word = []( const vector<byte_type> &data ) -> uint16_t {
+    for( size_t i = 0; i < 28; ++i )
+    {
+      uint32_t block_id = 0, block_pos = 0;
+      memcpy( &block_id, data.data() + 0x70 + i*0x30, sizeof(block_id) );
+      if( block_id != static_cast<uint32_t>(CAMInputOutput::CAMIO::CAMBlock::ACQP) )
+        continue;
+      memcpy( &block_pos, data.data() + 0x70 + i*0x30 + 0x0a, sizeof(block_pos) );
+
+      uint16_t head_size = 0, count = 0;
+      memcpy( &head_size, data.data() + block_pos + 0x10, sizeof(head_size) );
+      REQUIRE( (block_pos + head_size + 0x46C + 2) <= data.size() );
+      memcpy( &count, data.data() + block_pos + head_size + 0x46C, sizeof(count) );
+      return count;
+    }
+    return 0xFFFF;
+  };
+
+  CHECK( acqp_count_word( baseline ) == 4 );
+  CHECK( acqp_count_word( excessive ) == 4 );
+
+  // And the over-long input still produces a file that parses.
+  CAMInputOutput::CAMIO reader;
+  reader.ReadFile( excessive );
+  CHECK( reader.GetEnergyCalibration().size() == 4 );  //literal: this is the format's contract
+}

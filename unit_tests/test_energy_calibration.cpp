@@ -806,6 +806,53 @@ TEST_CASE( "Energy calibration rejects malformed channel maps without changing s
   CHECK_THROWS( calibration.set_lower_channel_energy(2, overflowing_edges) );
   auto moved_overflowing_edges = overflowing_edges;
   CHECK_THROWS( calibration.set_lower_channel_energy(2, std::move(moved_overflowing_edges)) );
+
+  // The rvalue overload validates the extrapolated upper edge before moving, so a throw must
+  // leave the caller's vector untouched rather than emptied.
+  CHECK( moved_overflowing_edges.size() == 2 );
+  CHECK( moved_overflowing_edges[0] == 0.0f );
+
+  // ...and the success path still moves and extrapolates the upper channel edge.
+  std::vector<float> good_edges = { 0.0f, 10.0f, 20.0f };
+  calibration.set_lower_channel_energy( 3, std::move(good_edges) );
+  REQUIRE( calibration.channel_energies() );
+  CHECK( calibration.channel_energies()->size() == 4 );
+  CHECK( calibration.channel_energies()->back() == 30.0f );
+}
+
+
+TEST_CASE( "polynomial_binning rejects invalid channel energies" )
+{
+  // Used to silently return 64 NaNs.
+  CHECK_THROWS( polynomial_binning(
+      {0.0f, 1.0f, std::numeric_limits<float>::infinity(),
+       -std::numeric_limits<float>::infinity()}, 64, {}) );
+
+  // Regression guards, so the added validation cannot become over-strict: ordinary calibrations,
+  // with and without deviation pairs, must still succeed.
+  {
+    const auto binning = polynomial_binning( {0.0f, 3.0f}, 1024, {} );
+    REQUIRE( binning );
+    REQUIRE( binning->size() == 1024 );
+    CHECK( (*binning)[0] == 0.0f );
+    CHECK( (*binning)[1023] == 3069.0f );
+  }
+
+  {
+    const std::vector<std::pair<float,float>> dev_pairs = { {100.0f, 5.0f}, {1000.0f, -3.0f} };
+    const auto binning = polynomial_binning( {0.0f, 3.0f}, 1024, dev_pairs );
+    REQUIRE( binning );
+    REQUIRE( binning->size() == 1024 );
+    CHECK( (*binning)[0] == 5.0f );
+    CHECK( (*binning)[1023] == 3066.0f );
+  }
+
+  // The case the post-deviation-pair sweep exists to catch: `apply_deviation_pair()` early-returns
+  // when every energy is above the last spline node, skipping its own checks, and the in-loop
+  // check is skipped whenever `dev_pairs` is non-empty - so without the sweep this decreasing
+  // calibration would come back unvalidated.
+  CHECK_THROWS( polynomial_binning(
+      {1000.0f, -1.0f}, 64, {{1.0f, 0.0f}, {2.0f, 0.0f}}) );
 }
 
 

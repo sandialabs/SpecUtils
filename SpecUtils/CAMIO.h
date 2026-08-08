@@ -691,17 +691,44 @@ struct CnfGenieExtras
      */
     std::vector<LibraryLine> library_lines;
 
+    /** A pair of floats that may be unset.
+
+     This is `std::optional<std::pair<float,float>>` in all but name.  SpecUtils defaults to
+     C++11 (see `CMAKE_CXX_STANDARD` in the top-level CMakeLists.txt) and is built that way by
+     its own unit tests, python and wasm bindings - `std::optional` is C++17 and broke that build,
+     even though InterSpec itself compiles the library at C++17 and so never saw it.
+
+     `explicit operator bool()` is provided so `if( extras.shape_cal )` reads the same as it
+     would with `std::optional`; members are reached with `.` rather than `->`.
+     */
+    struct OptionalFloatPair
+    {
+        bool is_set = false;
+        float first = 0.0f;
+        float second = 0.0f;
+
+        OptionalFloatPair() = default;
+        OptionalFloatPair( const float a, const float b ) : is_set(true), first(a), second(b) {}
+
+        explicit operator bool() const { return is_set; }
+        void set( const float a, const float b ){ is_set = true; first = a; second = b; }
+        void reset(){ is_set = false; first = second = 0.0f; }
+    };
+
     /** {FWHMOFF, FWHMSLOPE} for `FWHM = FWHMOFF + FWHMSLOPE*sqrt(energy)`; if not set,
      `write_cnf` falls back to its normal hardcoded HPGe/NaI default shape calibration.
      */
-    std::optional<std::pair<float,float>> shape_cal;
+    OptionalFloatPair shape_cal;
 
     /** `{B2, B3}` of the low-tail calibration `T(E) = B2 + B3*E`; see
      `CAMIO::AddLowTailCalibration(...)`.  Leave unset for peaks with no low-energy tail.
      */
-    std::optional<std::pair<float,float>> low_tail_cal;
+    OptionalFloatPair low_tail_cal;
 
-    std::optional<CAMIO::EfficiencyModel> eff_model;
+    /** The efficiency model to write; `NotReadin` (the default) means none is set, and no
+     efficiency model is written.
+     */
+    CAMIO::EfficiencyModel eff_model = CAMIO::EfficiencyModel::NotReadin;
     std::vector<EfficiencyPoint> eff_points;
 
     /** Fitted peaks to write into the file's PEAK block; see `CAMIO::AddPeak(...)` for the units,

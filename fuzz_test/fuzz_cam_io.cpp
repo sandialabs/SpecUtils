@@ -333,20 +333,15 @@ vector<byte_type> write_file( const ParsedFile &parsed )
     for( size_t i = 0; i < nline; ++i )
       guarded( [&](){ writer.AddLine( parsed.lines[i] ); } );
 
+    // Nuclides go in exactly as they came out of the reader.  There used to be a workaround here
+    //  normalizing any unrecognized half-life unit to "s", because `AddNuclide(...)` compared the
+    //  unit string without trimming the trailing space Genie pads it with ("Y "), and so rejected
+    //  every nuclide the reader produces - the fuzzer never reached the nuclide record generator.
+    //  That is fixed (reader and writer now share `half_life_unit_to_seconds()`), and normalizing
+    //  here would hide a regression of it.
     const size_t nnuc = min( parsed.nuclides.size(), max_nuclides );
     for( size_t i = 0; i < nnuc; ++i )
-    {
-      CAMInputOutput::Nuclide nuc = parsed.nuclides[i];
-
-      // `AddNuclide(...)` throws for any unit it doesnt recognize, which would mean we almost
-      //  never reach the nuclide record generator; map anything unexpected to seconds.
-      const string unit = nuc.HalfLifeUnit;
-      if( (unit != "y") && (unit != "d") && (unit != "h") && (unit != "m") && (unit != "s")
-          && (unit != "Y") && (unit != "D") && (unit != "H") && (unit != "M") && (unit != "S") )
-        nuc.HalfLifeUnit = "s";
-
-      guarded( [&](){ writer.AddNuclide( nuc ); } );
-    }
+      guarded( [&](){ writer.AddNuclide( parsed.nuclides[i] ); } );
 
     written = writer.CreateFile();
   }catch( ... )

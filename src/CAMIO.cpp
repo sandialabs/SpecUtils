@@ -622,6 +622,14 @@ DetInfo::DetInfo(std::string type, std::string name, std::string serial_no,
     std::string mca_type)
     : Type(type), Name(name), SerialNo(serial_no), MCAType(mca_type){}
 
+// Out-of-line definitions for the `static constexpr` members that get ODR-used (bound to a
+//  reference by std::min/std::max, or iterated over).  Only needed because SpecUtils defaults to
+//  C++11; from C++17 these are implicitly inline and the definitions are redundant-but-harmless.
+constexpr size_t CAMIO::sm_genie_peak_block_size;
+constexpr size_t CAMIO::sm_genie_peak_time_offsets[2];
+constexpr uint16_t CAMIO::sm_disp_rec_size;
+constexpr size_t CAMIO::sm_genie_disp_block_size;
+
 // CAMIO constructor
 CAMIO::CAMIO()
   : acqpCommon( static_cast<size_t>(BlockSize::ACQP) - 0x30, 0 ),  // Initialize with zeros

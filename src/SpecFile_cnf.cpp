@@ -471,11 +471,11 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
         const string& detector_type = summed->detector_type();
         cam_obj.AddDetectorType(detector_type);
         if( genie_extras && genie_extras->shape_cal )
-          cam_obj.AddShapeCalibration( genie_extras->shape_cal->first, genie_extras->shape_cal->second );
+          cam_obj.AddShapeCalibration( genie_extras->shape_cal.first, genie_extras->shape_cal.second );
 
         if( genie_extras && genie_extras->low_tail_cal )
-          cam_obj.AddLowTailCalibration( genie_extras->low_tail_cal->first,
-                                         genie_extras->low_tail_cal->second );
+          cam_obj.AddLowTailCalibration( genie_extras->low_tail_cal.first,
+                                         genie_extras->low_tail_cal.second );
 
         //energy calibration
         //  Note: the calibration can only be left out of a file that carries no spectrum; channel
@@ -507,8 +507,8 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
                                        ll.is_key_line );
           }
 
-          if( genie_extras->eff_model )
-            cam_obj.AddEfficiencyModel( *genie_extras->eff_model );
+          if( genie_extras->eff_model != CAMInputOutput::CAMIO::EfficiencyModel::NotReadin )
+            cam_obj.AddEfficiencyModel( genie_extras->eff_model );
 
           if( !genie_extras->eff_points.empty() )
             cam_obj.AddEfficiencyPoints( genie_extras->eff_points );
