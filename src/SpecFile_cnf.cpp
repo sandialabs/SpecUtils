@@ -495,7 +495,7 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
         if( genie_extras )
         {
           // AddLineAndNuclide(...) defers actually creating each nuclide's library record until
-          // CreateFile() runs (after all lines have been added), and Genie's key-line selection
+          // CreateCAMFile() runs (after all lines have been added), and Genie's key-line selection
           // (AssignKeyLines()) runs automatically at that point too - so this is the only safe,
           // well-exercised way to build up a nuclide library (see CAMIO::AddLine(...) for why
           // adding already-created nuclide records and lines separately is not safe).
@@ -545,7 +545,7 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
         if( !omit_spectrum )
           cam_obj.AddSpectrum(gamma_channel_counts);
 
-        auto& cnf_file = cam_obj.CreateFile();
+        auto& cnf_file = cam_obj.CreateCAMFile();
         //write the file
          output.write((char* )cnf_file.data(), cnf_file.size());
 

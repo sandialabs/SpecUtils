@@ -1639,7 +1639,7 @@ std::vector<float>& CAMIO::GetEnergyCalibration() {
 }
 
 // create a file from added data
-std::vector<byte_type>& CAMIO::CreateFile() {
+std::vector<byte_type>& CAMIO::CreateCAMFile() {
 
     for (size_t i = 0; i < writeNuclides.size(); i++)
     {
@@ -1725,7 +1725,7 @@ std::vector<byte_type>& CAMIO::CreateFile() {
 
         const size_t value = next_index + 2;
         if( value > 255 )
-          throw std::runtime_error( "CAMIO::CreateFile: too many blocks to chain - next-block link ("
+          throw std::runtime_error( "CAMIO::CreateCAMFile: too many blocks to chain - next-block link ("
                                     + std::to_string(value) + ") does not fit in a byte." );
         block[0x0E] = static_cast<uint8_t>( value );
     };//set_next_block_link lambda
@@ -1770,7 +1770,7 @@ std::vector<byte_type>& CAMIO::CreateFile() {
     //  bounds check cannot catch it (it only compares against the whole file's length).  Fail
     //  loudly rather than write a file that silently loses nuclides.
     if( blockList.size() > sm_max_blocks )
-      throw std::runtime_error( "CAMIO::CreateFile: too much data - would need "
+      throw std::runtime_error( "CAMIO::CreateCAMFile: too much data - would need "
                                 + std::to_string(blockList.size()) + " blocks, but a CAM file's"
                                 " block directory only supports " + std::to_string(sm_max_blocks)
                                 + ".  Reduce the number of nuclide library lines." );
@@ -1980,7 +1980,7 @@ void CAMIO::AddLineAndNuclide(const float energy, const float yield,
     {
         nucNo = (*it).Index;
     }
-    // If the caller did not mark any key line, `AssignKeyLines()` (called from `CreateFile()`)
+    // If the caller did not mark any key line, `AssignKeyLines()` (called from `CreateCAMFile()`)
     //  picks one; if they did, theirs is kept.
     Line line(energy, energyUnc, yield, abundanceUnc, nucNo, isKeyLine, noWtMn);
 
@@ -2329,7 +2329,7 @@ void CAMIO::AddPeaks(const std::vector<Peak>& peaks_in)
 // blocks: Ba-133.cnf (23 records, recSize 240) and cs137.CNF (one record, recSize 248).  The
 // third file available, Q_C_UCRM125A_OSL_K_..., has a single all-zero record and says nothing
 // about the layout.  Real Genie 2000 reads peaks written by this function - but only alongside
-// the DISP block `CreateFile()` writes with it; see `sm_disp_rec_size`.
+// the DISP block `CreateCAMFile()` writes with it; see `sm_disp_rec_size`.
 std::vector<uint8_t> CAMIO::GeneratePeakBlock(size_t loc)
 {
     const uint16_t recOffset = 0x00F3;   //243, matching RecordSize::PEAK's source file
@@ -2968,7 +2968,7 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
 
     // Note: the `+ 4` here assumes exactly four blocks (ACQP, SAMP, PROC, SPEC) precede the
     //  NUCL/NLINES chain, which is not true in general (SAMP, SPEC and GEOM are all optional).
-    //  `CreateFile()` therefore passes `blockNum == 0` and patches the real link in afterwards;
+    //  `CreateCAMFile()` therefore passes `blockNum == 0` and patches the real link in afterwards;
     //  see `set_next_block_link` there.
     uint16_t blockRec = blockNum >= 1 ? blockNum + 4 : 0;
 

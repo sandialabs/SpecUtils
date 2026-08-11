@@ -297,8 +297,8 @@ void exercise_getters( CAMInputOutput::CAMIO &reader, ParsedFile * const parsed 
  */
 vector<byte_type> write_file( const ParsedFile &parsed )
 {
-  // The amount of memory `CreateFile()` needs scales with these, and the fuzzer has no reason to
-  //  care about large-but-similar inputs here, so keep them modest to stay fast and inside the
+  // The amount of memory `CreateCAMFile()` needs scales with these, and the fuzzer has no reason
+  //  to care about large-but-similar inputs here, so keep them modest to stay fast and inside the
   //  fuzzers RSS limit.
   const size_t max_channels = 16*1024;
   const size_t max_lines = 256;
@@ -343,7 +343,7 @@ vector<byte_type> write_file( const ParsedFile &parsed )
     for( size_t i = 0; i < nnuc; ++i )
       guarded( [&](){ writer.AddNuclide( parsed.nuclides[i] ); } );
 
-    written = writer.CreateFile();
+    written = writer.CreateCAMFile();
   }catch( ... )
   {
   }

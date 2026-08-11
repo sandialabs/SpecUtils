@@ -462,7 +462,7 @@ private:
     SpecUtils::time_point_t analysisTime{};
 
     /** The ACQP and SAMP blocks' "common" sections, built up by the various `Add...(...)`
-     functions and written out by `CreateFile()`.
+     functions and written out by `CreateCAMFile()`.
 
      Note: these were previously file-scope variables shared by every `CAMIO`, which leaked
      state between successive writes (a second file inherited the first one's energy
@@ -780,7 +780,8 @@ public:
      fitted quantities).
 
      Real Genie 2000 does read the regions of interest out of files written this way - but only
-     because `CreateFile()` also writes the DISP block that goes with them; see `sm_disp_rec_size`.
+     because `CreateCAMFile()` also writes the DISP block that goes with them; see
+     `sm_disp_rec_size`.
      What the per-record values look like in Genie's own peak report has not been checked.
 
      See `Peak` for the units - note in particular that `FullWidthAtHalfMaximum` is in keV, and
@@ -797,8 +798,13 @@ public:
     void AddGPSData(const double latitude, const double longitude, const float speed);
     void AddSpectrum(const std::vector<uint32_t>& channel_counts);
     void AddSpectrum(const std::vector<float>& channel_counts);
-    // create a file with the data added
-    std::vector<byte_type>& CreateFile();
+    /** Creates a file, in memory, from the data added.
+
+     Note: deliberately not named "CreateFile" - `<windows.h>` #defines that to `CreateFileA`,
+     so any translation unit that (even indirectly) pulls in the Windows headers before this one
+     would call, and fail to link against, a function that does not exist.
+     */
+    std::vector<byte_type>& CreateCAMFile();
 
     inline void SetKeyLineInerferenceLimit(const float limit) { key_line_intf_limit = limit; };
     float GetKeyLineInerferenceLimit() const { return key_line_intf_limit; }

@@ -700,7 +700,7 @@ TEST_CASE( "CAM energy calibration is clamped to the four ENGCAL coefficients" )
     CAMInputOutput::CAMIO writer;
     writer.AddEnergyCalibration( coefs );
     writer.AddSpectrum( vector<uint32_t>( 128, 5 ) );
-    return writer.CreateFile();
+    return writer.CreateCAMFile();
   };
 
   const vector<byte_type> baseline = write_file( four_coefs );
