@@ -513,6 +513,12 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
           if( !genie_extras->eff_points.empty() )
             cam_obj.AddEfficiencyPoints( genie_extras->eff_points );
 
+          if( !genie_extras->eff_fit_coeffs.empty() )
+            cam_obj.AddEfficiencyFit( genie_extras->eff_fit_coeffs,
+                                      genie_extras->eff_fit_reference_energy,
+                                      genie_extras->eff_fit_chi_square,
+                                      genie_extras->eff_detector_name );
+
           if( !genie_extras->peaks.empty() )
             cam_obj.AddPeaks( genie_extras->peaks );
         }//if( genie_extras )

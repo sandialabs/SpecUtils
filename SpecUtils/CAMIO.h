@@ -92,6 +92,36 @@ struct Peak {
     int LeftChannel;
     int RightChannel;
 
+    /** Absolute full-energy-peak efficiency at `Energy`, i.e. the value of the file's efficiency
+     calibration there.  Genie fills this on every peak of a file that has an efficiency
+     calibration, and leaves it zero on one that does not.
+     */
+    float Efficiency = 0.0f;
+    /** Absolute uncertainty on `Efficiency`; see `EfficiencyUncertainty` of `EfficiencyPoint`. */
+    float EfficiencyUncertainty = 0.0f;
+
+    /** What Genie's peak report calls "Peak significance" - confirmed by reading the report for
+     the Ba-133 test file, whose first five peaks come out as 4.27, 3.79, 3.17, 26.79 and 15.56,
+     matching this field exactly.
+
+     Genie's own value is a peak-search statistic, not a fit one: it is NOT `Area/AreaUncertainty`
+     (which for that file's second peak is 13.6 against a reported 3.79), and it drops for peaks
+     sharing a ROI, which is what a second-difference search response does for a blended peak.
+     Reproducing it would mean reproducing Genie's peak search, so what gets written is the
+     ordinary `Area/AreaUncertainty` significance - the same thing for an isolated peak (4.31 vs
+     Genie's 4.27 for that file's first peak), and larger for a strong or blended one.
+     */
+    float Significance = 0.0f;
+
+    /** The 1-sigma background uncertainty the critical level is formed from.
+
+     Purpose inferred rather than documented: across the 23 peaks of the Ba-133 test file this
+     field is `CriticalLevel/2.13` to within 7%, which is what a Currie decision limit built on a
+     background sigma looks like.  Its exact definition could not be pinned down, so treat the
+     value written as indicative rather than authoritative.
+     */
+    float BackgroundSigma = 0.0f;
+
     /** The `LowTail` value a real Genie file uses to mean "no low-energy tail". */
     static constexpr float sm_no_low_tail = 1000.0f;
 
@@ -307,17 +337,54 @@ public:
         LineMDA = 0x25,
     };
 
+    /** Peak-record fields beyond the ones `PeakParameterLocation` names, all of which real Genie
+     files fill on every peak.  Offsets are from the same record base as `PeakParameterLocation`.
+     */
     enum class PeakParameterLocation2 : uint8_t {
+        /** The centroid, in channels - and the copy that matters: **this is the one Genie's peak
+         report prints**, not `Centroid` (0x40).  Confirmed against the Ba-133 test file, whose
+         second and third peaks report 58.83 and 62.14 - this field's values, where 0x40 holds
+         58.92 and 62.23.
+
+         The two agree exactly for a peak fitted alone and differ in the last digits for one of a
+         multiplet, so 0x40 is presumably the fitted centroid and this the peak-search one.  A peak
+         written without it is reported by Genie as sitting at channel zero.
+         */
+        CentroidAgain = 0x14,
+        /** Absolute efficiency at the peak energy, and again at `EfficiencyAgain`. */
+        Efficiency = 0x20,
+        /** Uncertainty on that efficiency, and again at `EfficiencyUncertaintyAgain`. */
+        EfficiencyUncertainty = 0x38,
+        /** Index of the peak within its multiplet; 0 for a peak fitted alone.  Genie's values run
+         0-3 with no discernible ordering, so what it counts was not determined.
+         */
+        MultipletIndex = 0x28,
         /** 0x10 for a peak fitted alone in its ROI, 0xD8 for one of several peaks sharing a ROI.
          Holds without exception across every peak of every Genie file checked.
          */
         MultipletFlag = 0x29,
+        /** 0x03 alongside a `MultipletFlag` of 0xD8, and 0 alongside 0x10 - so the three bytes
+         0x28-0x2A read as one word/longword per peak (0x0003D8nn vs 0x00001000).
+         */
+        MultipletFlag2 = 0x2A,
+        /** A longword, never zero in a real file: 1-6 rising with energy in the Ba-133 file, and
+         0x81 in cs137.CNF.  Purpose not determined - see `GeneratePeakBlock()` for what is
+         written.
+         */
+        UnknownLongword = 0x3C,
         /** A verbatim second copy of `Area` (0x34); Genie writes both on every peak. */
         AreaAgain = 0x8C,
         /** A verbatim second copy of `AreaUncertainty` (0x84). */
         AreaUncertaintyAgain = 0x90,
+        /** What Genie's report prints as "Peak significance"; see `Peak::Significance`. */
+        Significance = 0x60,
+        /** See `Peak::BackgroundSigma`. */
+        BackgroundSigma = 0x68,
         /** Name of the fit engine that produced the peak, e.g. "PANOLIN1S"; 16 bytes. */
         FitEngineName = 0x98,
+        /** Second copies of `Efficiency` (0x20) and `EfficiencyUncertainty` (0x38). */
+        EfficiencyAgain = 0xB9,
+        EfficiencyUncertaintyAgain = 0xBD,
     };
 
     enum class EfficiencyModel : uint8_t
@@ -327,6 +394,18 @@ public:
       INTERPOL,
       Unknown, NotReadin
     };
+
+    /** Most fit coefficients `AddEfficiencyFit(...)` can write - the slots Genie keeps its
+     display-basis coefficients in run out first.
+     */
+    static constexpr size_t sm_geom_max_fit_coeffs = 6;
+
+    /** The reference energy the Ba-133 test file expresses its Empirical coefficients about, and
+     `AddEfficiencyFit(...)`'s default.  Which `E0` is used does not change the curve as long as
+     both stored bases agree on it, so this round number - very likely a Genie constant - is what
+     we write too.
+     */
+    static constexpr float sm_geom_default_fit_ref_energy = 1260.0f;
 
     //enum class FwhmType : uint8_t
     //{
@@ -357,9 +436,19 @@ private:
     // Data staged for writing a GEOM (efficiency) block; see `AddEfficiencyModel`/`AddEfficiencyPoint(s)`.
     EfficiencyModel writeEfficiencyModel = EfficiencyModel::Unknown;
     std::vector<EfficiencyPoint> writeEfficiencyPoints;
+    /** The fitted curve written with those points; see `AddEfficiencyFit(...)`. */
+    std::vector<float> writeEfficiencyFitCoeffs;
+    float writeEfficiencyFitRefEnergy = 0.0f;
+    float writeEfficiencyFitChiSquare = 1.0f;
+    std::string writeEfficiencyDetectorName;
 
     // Data staged for writing a PEAK block; see `AddPeak(s)`.
     std::vector<Peak> writePeaks;
+
+    /** Live time, in seconds, as given to `AddLiveTime(...)`.  The PEAK block repeats it (see
+     `GeneratePeakBlock()`), so it is kept rather than only encoded into `acqpCommon`.
+     */
+    float writeLiveTime = 0.0f;
 
     /** Timestamp written as when the peak search/fit was performed; see `GeneratePeakBlock()`.
      Set from `AddAcquitionTime(...)` so writing a file stays deterministic (a real Genie file
@@ -399,10 +488,68 @@ private:
     static constexpr uint16_t sm_geom_ent_offset = 0x04B2;
     static constexpr uint16_t sm_geom_ent_size = 33;
 
+    /** Genie space-pads the GEOM model-name field out to this many bytes ("INTERPOL" followed by
+     24 spaces in the Ba-133 file); writing only the name and leaving the rest zero also truncated
+     "EMPIRICAL" to eight characters, so it could never be read back.
+     */
+    static constexpr size_t sm_geom_model_name_size = 32;
+
+    /** Where a Genie-written GEOM block keeps the *fitted* efficiency curve.  All are offsets from
+     the start of the block's record, i.e. from block + `block_header_size` + `sm_geom_rec_offset`.
+
+     Genie's "Empirical" efficiency model is `ln(eff) = sum_i{ a_i * ln(E0/E)^i }`, and the `a_i` it
+     displays are exactly a weighted least-squares fit of ln(eff) against ln(E) over the block's own
+     efficiency points (weights 1/sigma_rel^2), re-expressed about the reference energy `E0`.  Both
+     bases are stored: the plain ln(E) coefficients run contiguously as floats from
+     `sm_geom_fit_ln_e_coeffs_offset`, and the display-basis `a_i` sit at the scattered offsets in
+     `sm_geom_fit_display_coeff_offsets`.
+
+     Verified by reproducing both the stored ln(E) coefficients and the Empirical formula Genie
+     displays for the Ba-133 test file from that file's own 19 efficiency points; see
+     `AddEfficiencyFit(...)`.
+     */
+    static constexpr size_t sm_geom_fit_ref_energy_offset = 82;
+    static constexpr size_t sm_geom_fit_ln_e_coeffs_offset = 218;
+    /** Polynomial order (a longword; 5 in the Ba-133 file, for a 6-coefficient fit). */
+    static constexpr size_t sm_geom_fit_order_offset = 122;
+    /** Offsets of the display-basis coefficients a0..a5, in order. */
+    static constexpr size_t sm_geom_fit_display_coeff_offsets[6] = { 86, 90, 94, 58, 62, 118 };
+
+    /** The rest of what a Genie-written GEOM block carries alongside a fitted curve - the marks of
+     an efficiency calibration Genie itself performed.
+
+     These matter: with the coefficients alone Genie offers only "Empirical" and "Interpolated",
+     and with these as well it also offers "Dual".  Established by bisection against real Genie
+     2000, grafting Ba-133.cnf's GEOM record header into our own files a piece at a time.  What
+     each individual field means is mostly not known - `sm_geom_engine_name_offset` holds the same
+     kind of engine name the PEAK block and the energy-calibration blocks carry, and the order is
+     repeated at three separate offsets - so they are written as a set rather than picked apart.
+     */
+    static constexpr size_t sm_geom_calibrated_flag_offset = 78;    //a byte, 0x02
+    static constexpr size_t sm_geom_fit_chi_square_offset = 126;
+    static constexpr size_t sm_geom_fit_order2_offset = 374;        //a byte
+    static constexpr size_t sm_geom_fit_scale_offset = 375;         //a float, 1.0
+    static constexpr size_t sm_geom_fit_chi_square2_offset = 379;
+    /** "Gamma Efcal v2.2", 16 bytes - the efficiency-calibration engine name. */
+    static constexpr size_t sm_geom_engine_name_offset = 383;
+    static constexpr size_t sm_geom_fit_order3_offset = 595;        //a byte
+    /** Detector/geometry description, 32 bytes, space padded. */
+    static constexpr size_t sm_geom_detector_name_offset = 10;
+    /** Calibration file name, 32 bytes, space padded. */
+    static constexpr size_t sm_geom_cal_file_name_offset = 423;
+    /** A 96-byte field Genie fills with spaces. */
+    static constexpr size_t sm_geom_blank_field_offset = 815;
+    static constexpr size_t sm_geom_blank_field_size = 96;
+    static constexpr size_t sm_geom_name_field_size = 32;
+
     // PEAK block geometry, taken from Genie-written files (CNFreader's cs137.CNF, and the Ba-133
     //  test file), which agree on all of it.  The block's "common" area names the algorithms that
-    //  produced the peaks; Genie writes these whenever a PEAK block is populated, and a file
-    //  without them appears to have its peak records ignored.
+    //  produced the peaks; Genie writes these whenever a PEAK block is populated.  Whether Genie
+    //  requires them is untested - every file tried against real Genie carried them - but what has
+    //  been ruled out is that any *per-record* field beyond the ones `PeakParameterLocation` names
+    //  is needed for Genie to read a peak; a file with all of `PeakParameterLocation2`'s fields
+    //  zeroed still had its ROIs read.  The DISP block is the thing that actually matters; see
+    //  `sm_disp_rec_size`.
     static constexpr size_t sm_genie_peak_block_size = 0x3000;
     static constexpr size_t sm_genie_peak_search_name_offset = 0x3C;
     static constexpr size_t sm_genie_peak_fit_name_offset = 0x9D;
@@ -416,8 +563,12 @@ private:
 
      The DISP block is the region-of-interest list that goes with a PEAK block: one 16-byte record
      per ROI, holding the ROI's channel range and how many peaks sit in it (so a doublet is one
-     DISP record referencing two PEAK records).  Genie appears to need it to make sense of a PEAK
-     block - peaks written without it are ignored.
+     DISP record referencing two PEAK records).
+
+     Genie needs it to make sense of a PEAK block: this has been confirmed against real Genie 2000,
+     which shows the ROIs of files written with it and ignores the peaks of an otherwise identical
+     file written without it (files from before this block was implemented).  Writing a PEAK block
+     without a DISP block is not a partial job - it is a no-op as far as Genie is concerned.
      */
     static constexpr uint16_t sm_disp_rec_size = 0x0010;
     static constexpr uint16_t sm_disp_rec_offset = 0x019C;
@@ -565,8 +716,12 @@ public:
      */
     void AddLowTailCalibration(const float lowTailOffset, const float lowTailSlope);
 
-    /** Sets the efficiency model tag (e.g. "DUAL", "SPLINE") that will be written
-     with the efficiency points added via `AddEfficiencyPoint(s)(...)`.
+    /** Sets the efficiency model tag (e.g. "EMPIRICAL", "INTERPOL") that will be written with the
+     efficiency points added via `AddEfficiencyPoint(s)(...)`.
+
+     The tag names which curve Genie should use through the points; a model that is fitted rather
+     than interpolated also needs the coefficients `AddEfficiencyFit(...)` writes.  With no model
+     set, "INTERPOL" is written - what Genie itself uses for a point-only efficiency.
      */
     void AddEfficiencyModel(const EfficiencyModel model);
 
@@ -581,12 +736,39 @@ public:
     void AddEfficiencyPoint(const float energy, const float efficiency, const float efficiencyUncertainty);
     void AddEfficiencyPoints(const std::vector<EfficiencyPoint>& points);
 
+    /** Sets the fitted efficiency curve written alongside the points, as the coefficients of
+     `ln(eff) = sum_i{ coefficients[i] * ln(energy/keV)^i }`.
+
+     Without this, a GEOM block holds calibration points but no curve, and Genie can only offer its
+     "Interpolated" efficiency model.  Genie itself derives this same fit from the points (weighted
+     by 1/sigma_rel^2), so the points' uncertainties must be non-zero for it to be able to.
+
+     `referenceEnergy` is the `E0` Genie's Empirical form `ln(eff) = sum_i{ a_i * ln(E0/E)^i }` is
+     expressed about; pass <= 0 for `sm_geom_default_fit_ref_energy`.  Both bases are written, so
+     the value only affects how the coefficients read out in Genie's dialog, not the curve.
+
+     At most `sm_geom_max_fit_coeffs` coefficients are stored; passing more throws.  Passing an
+     empty vector clears any previously set fit.
+
+     `chiSquare` is the fit's reduced chi-square and `detectorName` describes what was calibrated;
+     both go into the fields that make Genie treat the block as a calibration it performed, which
+     is what gets its "Dual" model offered as well as "Empirical" (see
+     `sm_geom_calibrated_flag_offset`).
+     */
+    void AddEfficiencyFit(const std::vector<float>& coefficients, const float referenceEnergy,
+                          const float chiSquare = 1.0f, const std::string &detectorName = "");
+
     /** Adds a fitted peak to be written into the file's PEAK block.
 
      The block header and the per-record field layout were both checked against a Genie-produced
      CNF containing a real peak record (see `Peak` for the values used); every field this writes
-     was confirmed to decode back to the expected quantity.  What has NOT been verified is real
-     Genie *reading* a file we wrote.
+     was confirmed to decode back to the expected quantity, and every field a real Genie file
+     fills is now written (`PeakParameterLocation2` covers the ones that are not simply the peak's
+     fitted quantities).
+
+     Real Genie 2000 does read the regions of interest out of files written this way - but only
+     because `CreateFile()` also writes the DISP block that goes with them; see `sm_disp_rec_size`.
+     What the per-record values look like in Genie's own peak report has not been checked.
 
      See `Peak` for the units - note in particular that `FullWidthAtHalfMaximum` is in keV, and
      `CountRateUncertainty` is a relative percent.
@@ -625,6 +807,12 @@ protected:
     /** Picks a "key" line for every nuclide that does not already have one explicitly marked. */
     void AssignKeyLines();
     std::vector<uint8_t> GenerateGeometryBlock(size_t loc);
+
+    /** Writes `writeEfficiencyFitCoeffs` into an in-progress GEOM block, in both the ln(energy)
+     basis Genie stores and the ln(E0/energy) basis it displays; see `AddEfficiencyFit(...)`.
+     */
+    void WriteEfficiencyFit(std::vector<uint8_t> &block) const;
+
     std::vector<uint8_t> GeneratePeakBlock(size_t loc);
 
     /** The ROI list that accompanies `GeneratePeakBlock()`; see `sm_disp_rec_size`.  ROIs are
@@ -730,6 +918,16 @@ struct CnfGenieExtras
      */
     CAMIO::EfficiencyModel eff_model = CAMIO::EfficiencyModel::NotReadin;
     std::vector<EfficiencyPoint> eff_points;
+
+    /** The fitted efficiency curve to write with those points; see `CAMIO::AddEfficiencyFit(...)`.
+     Leave empty to write points only, which limits Genie to its "Interpolated" model.
+     */
+    std::vector<float> eff_fit_coeffs;
+    /** `E0` for the fit above; <= 0 uses `CAMIO::sm_geom_default_fit_ref_energy`. */
+    float eff_fit_reference_energy = 0.0f;
+    /** Reduced chi-square of that fit, and what it describes; see `CAMIO::AddEfficiencyFit(...)`. */
+    float eff_fit_chi_square = 1.0f;
+    std::string eff_detector_name;
 
     /** Fitted peaks to write into the file's PEAK block; see `CAMIO::AddPeak(...)` for the units,
      and for how much (little) the PEAK write path has been validated.

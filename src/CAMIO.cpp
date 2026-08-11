@@ -17,6 +17,7 @@
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
+#include <cmath>
 #include <iomanip>
 #include <fstream>
 #include <iostream>
@@ -629,6 +630,9 @@ constexpr size_t CAMIO::sm_genie_peak_block_size;
 constexpr size_t CAMIO::sm_genie_peak_time_offsets[2];
 constexpr uint16_t CAMIO::sm_disp_rec_size;
 constexpr size_t CAMIO::sm_genie_disp_block_size;
+constexpr size_t CAMIO::sm_geom_max_fit_coeffs;
+constexpr size_t CAMIO::sm_geom_fit_display_coeff_offsets[6];
+constexpr float CAMIO::sm_geom_default_fit_ref_energy;
 
 // CAMIO constructor
 CAMIO::CAMIO()
@@ -798,10 +802,12 @@ void CAMIO::ReadGeometryBlock(size_t pos, uint16_t records) {
     if( records > 0 && entSize < pointSize )
       throw std::runtime_error( "ReadGeometryBlock: efficiency entry size is too small" );
 
-    if( (pos + recOffset + 222 + 8) <= readData->size() )
+    // Read the whole `sm_geom_model_name_size`-byte field, not just its first eight bytes: the
+    //  longest name, "EMPIRICAL", is nine characters, and an eight-byte read could never match it.
+    if( (pos + recOffset + 222 + sm_geom_model_name_size) <= readData->size() )
     {
-      std::string type_str( 9, '\0');
-      std::memcpy(&(type_str[0]), &(*readData)[pos + recOffset + 222], 8);
+      std::string type_str( sm_geom_model_name_size, '\0' );
+      std::memcpy(&(type_str[0]), &(*readData)[pos + recOffset + 222], sm_geom_model_name_size);
       if( type_str.find( "SPLINE" ) != std::string::npos )
         efficiencyModel = EfficiencyModel::SPLINE;
       else if( type_str.find( "EMPIRICAL" ) != std::string::npos )
@@ -1776,7 +1782,12 @@ std::vector<byte_type>& CAMIO::CreateFile() {
     writeNuclides.clear();
     writeEfficiencyPoints.clear();
     writeEfficiencyModel = EfficiencyModel::Unknown;
+    writeEfficiencyFitCoeffs.clear();
+    writeEfficiencyFitRefEnergy = 0.0f;
+    writeEfficiencyFitChiSquare = 1.0f;
+    writeEfficiencyDetectorName.clear();
     writePeaks.clear();
+    writeLiveTime = 0.0f;
 
     // Reset the rest of the write-side state too, so this object can be used to write another
     //  file without inheriting this one's calibrations, sample title, detector type or blocks.
@@ -2052,6 +2063,115 @@ void CAMIO::AddEfficiencyPoints(const std::vector<EfficiencyPoint>& points)
         AddEfficiencyPoint(pt.Energy, pt.Efficiency, pt.EfficiencyUncertainty);
 }
 
+void CAMIO::AddEfficiencyFit(const std::vector<float>& coefficients, const float referenceEnergy,
+                             const float chiSquare, const std::string &detectorName)
+{
+    writeEfficiencyFitChiSquare = (chiSquare > 0.0f) ? chiSquare : 1.0f;
+    writeEfficiencyDetectorName = detectorName;
+
+    if( coefficients.size() > sm_geom_max_fit_coeffs )
+      throw std::invalid_argument( "AddEfficiencyFit: at most "
+                                   + std::to_string(sm_geom_max_fit_coeffs) + " coefficients can be"
+                                   " written, but " + std::to_string(coefficients.size())
+                                   + " were given." );
+
+    for( const float c : coefficients )
+    {
+      if( !std::isfinite(c) )
+        throw std::invalid_argument( "AddEfficiencyFit: non-finite coefficient." );
+    }
+
+    writeEfficiencyFitCoeffs = coefficients;
+    writeEfficiencyFitRefEnergy = (referenceEnergy > 0.0f) ? referenceEnergy
+                                                           : sm_geom_default_fit_ref_energy;
+}
+
+// Writes the fitted efficiency curve into a GEOM block that already has its header and model name.
+//
+// Genie keeps the curve twice: as the plain `ln(eff) = sum_i{ c_i*ln(E)^i }` coefficients, and in
+// the `ln(eff) = sum_j{ a_j*ln(E0/E)^j }` basis its Empirical dialog displays.  Substituting
+// `x = L - u` (L = ln(E0), u = ln(E0/E)) into the first gives the second:
+//    a_j = (-1)^j * sum_{i>=j}{ c_i * C(i,j) * L^(i-j) }
+// Both were checked against the Ba-133 test file: its stored ln(E) coefficients are reproduced by
+// fitting its own 19 efficiency points, and transforming them about its stored E0 (1260 keV) gives
+// exactly the Empirical formula Genie displays for that file.
+void CAMIO::WriteEfficiencyFit(std::vector<uint8_t> &block) const
+{
+    const size_t num_coefs = writeEfficiencyFitCoeffs.size();
+    assert( num_coefs && (num_coefs <= sm_geom_max_fit_coeffs) );
+    if( !num_coefs || (num_coefs > sm_geom_max_fit_coeffs) )
+      return;
+
+    const size_t recStart = static_cast<size_t>(block_header_size)
+                             + static_cast<size_t>(sm_geom_rec_offset);
+
+    // The furthest-out thing written; every other offset is below it.
+    const size_t needed = recStart + sm_geom_blank_field_offset + sm_geom_blank_field_size;
+    if( needed > block.size() )
+      throw std::out_of_range( "WriteEfficiencyFit: block too small for the efficiency fit" );
+
+    const float refEnergy = (writeEfficiencyFitRefEnergy > 0.0f) ? writeEfficiencyFitRefEnergy
+                                                                 : sm_geom_default_fit_ref_energy;
+    enter_CAM_value( refEnergy, block, recStart + sm_geom_fit_ref_energy_offset, cam_type::cam_float );
+    enter_CAM_value( static_cast<uint32_t>(num_coefs - 1), block,
+                     recStart + sm_geom_fit_order_offset, cam_type::cam_longword );
+
+    for( size_t i = 0; i < num_coefs; ++i )
+      enter_CAM_value( writeEfficiencyFitCoeffs[i], block,
+                       recStart + sm_geom_fit_ln_e_coeffs_offset + 4*i, cam_type::cam_float );
+
+    // Binomial coefficients C(i,j), by Pascal's rule (the zero-initialization supplies the
+    //  out-of-triangle terms).
+    double binomial[sm_geom_max_fit_coeffs][sm_geom_max_fit_coeffs] = {};
+    binomial[0][0] = 1.0;
+    for( size_t i = 1; i < sm_geom_max_fit_coeffs; ++i )
+    {
+      binomial[i][0] = 1.0;
+      for( size_t j = 1; j <= i; ++j )
+        binomial[i][j] = binomial[i-1][j-1] + binomial[i-1][j];
+    }
+
+    const double lnRef = std::log( static_cast<double>(refEnergy) );
+    for( size_t j = 0; j < num_coefs; ++j )
+    {
+      double a_j = 0.0;
+      for( size_t i = j; i < num_coefs; ++i )
+        a_j += writeEfficiencyFitCoeffs[i] * binomial[i][j] * std::pow( lnRef, static_cast<double>(i - j) );
+
+      if( j % 2 )
+        a_j = -a_j;
+
+      enter_CAM_value( static_cast<float>(a_j), block,
+                       recStart + sm_geom_fit_display_coeff_offsets[j], cam_type::cam_float );
+    }//for( loop over display-basis coefficients )
+
+    // The marks of a calibration Genie performed itself.  Without these Genie offers only
+    //  "Empirical" and "Interpolated" for the curve above; with them it offers "Dual" as well.
+    //  See `sm_geom_calibrated_flag_offset` for how that was established.
+    const uint8_t order_byte = static_cast<uint8_t>( num_coefs - 1 );
+    block[recStart + sm_geom_calibrated_flag_offset] = 0x02;
+    block[recStart + sm_geom_fit_order2_offset] = order_byte;
+    block[recStart + sm_geom_fit_order3_offset] = order_byte;
+
+    enter_CAM_value( 1.0f, block, recStart + sm_geom_fit_scale_offset, cam_type::cam_float );
+    enter_CAM_value( writeEfficiencyFitChiSquare, block,
+                     recStart + sm_geom_fit_chi_square_offset, cam_type::cam_float );
+    enter_CAM_value( writeEfficiencyFitChiSquare, block,
+                     recStart + sm_geom_fit_chi_square2_offset, cam_type::cam_float );
+
+    const auto put_padded = [&block,recStart]( const size_t offset, const std::string &text,
+                                               const size_t field_len ){
+      for( size_t i = 0; i < field_len; ++i )
+        block[recStart + offset + i] = static_cast<uint8_t>( (i < text.size()) ? text[i] : ' ' );
+    };
+
+    put_padded( sm_geom_engine_name_offset, "Gamma Efcal v2.2", 16 );
+    put_padded( sm_geom_detector_name_offset, writeEfficiencyDetectorName, sm_geom_name_field_size );
+    put_padded( sm_geom_cal_file_name_offset, "", sm_geom_name_field_size );
+    put_padded( sm_geom_blank_field_offset, "", sm_geom_blank_field_size );
+}//CAMIO::WriteEfficiencyFit(...)
+
+
 // Generates the GEOM (efficiency) block from `writeEfficiencyModel`/`writeEfficiencyPoints`.
 //
 // EXPERIMENTAL: the field layout mirrors ReadGeometryBlock()'s interpretation (which has been
@@ -2105,17 +2225,25 @@ std::vector<uint8_t> CAMIO::GenerateGeometryBlock(size_t loc)
         case EfficiencyModel::Unknown:
         case EfficiencyModel::NotReadin:
         default:
-          modelStr = "SPLINE";
+          // Points with no model named are what Genie itself calls "INTERPOL"; "SPLINE" (the
+          //  previous default here) is not a name Genie 2000 uses.
+          modelStr = "INTERPOL";
           break;
     }
 
     // `ReadGeometryBlock()` reads the model name at pos+recOffset+222, and a real Genie file puts
-    //  it exactly there (a real block holds e.g. "INTERPOL" at recOffset 32 + 222).
+    //  it exactly there (a real block holds e.g. "INTERPOL" at recOffset 32 + 222).  Genie writes
+    //  the full `sm_geom_model_name_size`-byte field, space padded.
     const size_t typeStrPos = static_cast<size_t>(recOffset) + 222;
-    if( (typeStrPos + 8) > block.size() )
+    if( (typeStrPos + sm_geom_model_name_size) > block.size() )
       throw std::out_of_range( "GenerateGeometryBlock: block too small for model type string" );
-    for( size_t i = 0; i < 8 && i < modelStr.size(); ++i )
-      block[typeStrPos + i] = static_cast<uint8_t>(modelStr[i]);
+    for( size_t i = 0; i < sm_geom_model_name_size; ++i )
+      block[typeStrPos + i] = static_cast<uint8_t>( (i < modelStr.size()) ? modelStr[i] : ' ' );
+
+    // The fitted curve.  Without this a GEOM block holds calibration points but no curve, and
+    //  Genie can only offer its "Interpolated" model; see `AddEfficiencyFit(...)`.
+    if( !writeEfficiencyFitCoeffs.empty() )
+      WriteEfficiencyFit( block );
 
     const size_t entStart = static_cast<size_t>(block_header_size)
                              + static_cast<size_t>(recOffset) + static_cast<size_t>(entOffset);
@@ -2208,7 +2336,11 @@ std::vector<uint8_t> CAMIO::GeneratePeakBlock(size_t loc)
     //  carries a "Std Efcor v2.1" entry, while cs137.CNF has 0x20 and does not.  We do no
     //  efficiency correction of peak areas, so 0x20 is the case we match.
     enter_CAM_value( uint32_t(0x20), block, 0x30, cam_type::cam_longword );
-    enter_CAM_value( uint32_t(0xFFFFFFFF), block, 0x38, cam_type::cam_longword );
+
+    // The live time the peaks were fit over, as a CAM duration (a negative count of 100 ns ticks -
+    //  the same encoding the ACQP block's times use).  Ba-133.cnf holds -300 s here and cs137.CNF
+    //  -7400 s, each matching that file's own Area/CountRate ratio.
+    enter_CAM_value( writeLiveTime, block, 0x34, cam_type::cam_duration );
 
     for( size_t i = 0; i < numPeaks; ++i )
     {
@@ -2246,25 +2378,54 @@ std::vector<uint8_t> CAMIO::GeneratePeakBlock(size_t loc)
         enter_CAM_value( width, block, recPos + static_cast<size_t>(PeakParameterLocation::Width), cam_type::cam_word );
 
         // Fields Genie fills on every peak of every file checked, but that are not simply more of
-        //  the peak's fitted quantities:
-        //  - the area and its uncertainty appear a second time, verbatim;
-        //  - a flag distinguishing a peak fitted alone in its ROI from one of a multiplet;
-        //  - the name of the fit engine.
-        //  Genie also stores the peak's efficiency at 0x38 (and again at 0xBD); we have no
-        //  per-peak efficiency to put there, so those are left zero.
-        enter_CAM_value( p.Area, block,
-                        recPos + static_cast<size_t>(PeakParameterLocation2::AreaAgain), cam_type::cam_float );
-        enter_CAM_value( p.AreaUncertainty, block,
-                        recPos + static_cast<size_t>(PeakParameterLocation2::AreaUncertaintyAgain), cam_type::cam_float );
+        //  the peak's fitted quantities; see `PeakParameterLocation2` for what each is.  Several
+        //  quantities are stored twice, the centroid and the area among them - our own reader only
+        //  ever looked at one copy of each, so a file could round-trip through this class with the
+        //  other copy left zero.
+        const auto put_float2 = [&block,recPos]( const PeakParameterLocation2 where, const float value ){
+            enter_CAM_value( value, block, recPos + static_cast<size_t>(where), cam_type::cam_float );
+        };
+
+        put_float2( PeakParameterLocation2::CentroidAgain, p.Centroid );
+        put_float2( PeakParameterLocation2::AreaAgain, p.Area );
+        put_float2( PeakParameterLocation2::AreaUncertaintyAgain, p.AreaUncertainty );
+        put_float2( PeakParameterLocation2::Efficiency, p.Efficiency );
+        put_float2( PeakParameterLocation2::EfficiencyAgain, p.Efficiency );
+        put_float2( PeakParameterLocation2::EfficiencyUncertainty, p.EfficiencyUncertainty );
+        put_float2( PeakParameterLocation2::EfficiencyUncertaintyAgain, p.EfficiencyUncertainty );
+        put_float2( PeakParameterLocation2::Significance, p.Significance );
+        put_float2( PeakParameterLocation2::BackgroundSigma, p.BackgroundSigma );
+
+        // Never zero in a real file, but what it counts is unknown (see `UnknownLongword`), so
+        //  write the smallest value seen rather than invent a meaning for it.
+        enter_CAM_value( uint32_t(1), block,
+                        recPos + static_cast<size_t>(PeakParameterLocation2::UnknownLongword),
+                        cam_type::cam_longword );
 
         //  Compare the same clamped channel numbers `GenerateDispBlock()` groups on, so a peak is
         //  never flagged as a singlet while DISP counts it in a multi-peak region.
-        const bool in_multiplet = (std::count_if( begin(writePeaks), end(writePeaks),
-            [left,&p]( const Peak &o ){
-                return (static_cast<uint16_t>(std::max(0, std::min(o.LeftChannel, 0xFFFF))) == static_cast<uint16_t>(left))
-                       && (o.RightChannel == p.RightChannel);
-            } ) > 1);
+        const uint16_t clamped_left = static_cast<uint16_t>(left & 0xFFFFu);
+        size_t multiplet_index = 0, multiplet_count = 0;
+        for( size_t j = 0; j < numPeaks; ++j )
+        {
+            const Peak &o = writePeaks[j];
+            const uint16_t o_left = static_cast<uint16_t>( std::max(0, std::min(o.LeftChannel, 0xFFFF)) );
+            if( (o_left != clamped_left) || (o.RightChannel != p.RightChannel) )
+              continue;
+
+            if( j < i )
+              multiplet_index += 1;
+            multiplet_count += 1;
+        }//for( count the peaks sharing this ROI )
+
+        const bool in_multiplet = (multiplet_count > 1);
         block[recPos + static_cast<size_t>(PeakParameterLocation2::MultipletFlag)] = in_multiplet ? 0xD8 : 0x10;
+        if( in_multiplet )
+        {
+            block[recPos + static_cast<size_t>(PeakParameterLocation2::MultipletIndex)]
+                                        = static_cast<uint8_t>( std::min<size_t>(multiplet_index, 0xFF) );
+            block[recPos + static_cast<size_t>(PeakParameterLocation2::MultipletFlag2)] = 0x03;
+        }
 
         const char * const engine = "PANOLIN1S";
         std::memcpy( &block[recPos + static_cast<size_t>(PeakParameterLocation2::FitEngineName)],
@@ -2352,6 +2513,7 @@ void CAMIO::AddRealTime(const float real_time)
 // Add the live time
 void CAMIO::AddLiveTime(const float live_time)
 {
+    writeLiveTime = live_time;
     enter_CAM_value(live_time, acqpCommon, static_cast<size_t>(acqp_rec_tab_loc + uint16_t(0x11)), cam_type::cam_duration);
 }
 // Add the sample title
@@ -2864,6 +3026,12 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
             const uint16_t numPointsGeom = numLines;
 
             values[0] = 0x0500;          // commonFlag
+            // The 32-bit value at 0x12 differs in all three real files (0x05673CA0, 0x000DCA90,
+            //  0x000D5290), so it is not a class signature Genie can be checking; two of the three
+            //  do agree on the high word and on 0x16, which is also the PEAK/NUCL convention, so
+            //  match that much and leave the low word zero.
+            values[6] = 0x000D;
+            values[7] = 0x2400;
             values[11] = 1;              // numRec
             values[12] = 0x0F02;         // recSize (3842, as in a real block)
             values[13] = recOffsetGeom;  // recOffset
