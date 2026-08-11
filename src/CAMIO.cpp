@@ -1232,6 +1232,10 @@ std::vector<Peak>& CAMIO::GetPeaks() {
         throw std::runtime_error("There is no peak data in the loaded file");
     }
 
+    // Clear first, like `GetNuclides()`: without this a second call appends a second copy of every
+    //  peak - the same bug this class already had in `GetLines()`.
+    filePeaks.clear();
+
     for (auto& it = range.first; it != range.second; ++it) {
         size_t pos = it->second;
 
@@ -1671,7 +1675,10 @@ std::vector<byte_type>& CAMIO::CreateFile() {
         loc += specBlockData.size();
     }
 
-    if (!writeEfficiencyPoints.empty())
+    // A fitted curve with no points is what cs137.CNF has (a model name and nothing else), so it
+    //  is a legitimate block to write - and dropping it silently, as this used to when only
+    //  `AddEfficiencyFit(...)` had been called, loses data the caller asked for without saying so.
+    if (!writeEfficiencyPoints.empty() || !writeEfficiencyFitCoeffs.empty())
     {
         auto geomBlockData = GenerateGeometryBlock(loc);
         blockList.push_back(geomBlockData);
@@ -2066,9 +2073,8 @@ void CAMIO::AddEfficiencyPoints(const std::vector<EfficiencyPoint>& points)
 void CAMIO::AddEfficiencyFit(const std::vector<float>& coefficients, const float referenceEnergy,
                              const float chiSquare, const std::string &detectorName)
 {
-    writeEfficiencyFitChiSquare = (chiSquare > 0.0f) ? chiSquare : 1.0f;
-    writeEfficiencyDetectorName = detectorName;
-
+    // Validate everything before touching any member, so a rejected call leaves whatever fit was
+    //  previously set intact rather than half-overwritten.
     if( coefficients.size() > sm_geom_max_fit_coeffs )
       throw std::invalid_argument( "AddEfficiencyFit: at most "
                                    + std::to_string(sm_geom_max_fit_coeffs) + " coefficients can be"
@@ -2081,9 +2087,24 @@ void CAMIO::AddEfficiencyFit(const std::vector<float>& coefficients, const float
         throw std::invalid_argument( "AddEfficiencyFit: non-finite coefficient." );
     }
 
+    if( !std::isfinite(chiSquare) || !std::isfinite(referenceEnergy) )
+      throw std::invalid_argument( "AddEfficiencyFit: non-finite chi-square or reference energy." );
+
+    if( coefficients.empty() )
+    {
+      // Documented as clearing the fit, so clear all of it, not just the coefficients.
+      writeEfficiencyFitCoeffs.clear();
+      writeEfficiencyFitRefEnergy = 0.0f;
+      writeEfficiencyFitChiSquare = 1.0f;
+      writeEfficiencyDetectorName.clear();
+      return;
+    }
+
     writeEfficiencyFitCoeffs = coefficients;
     writeEfficiencyFitRefEnergy = (referenceEnergy > 0.0f) ? referenceEnergy
                                                            : sm_geom_default_fit_ref_energy;
+    writeEfficiencyFitChiSquare = (chiSquare > 0.0f) ? chiSquare : 1.0f;
+    writeEfficiencyDetectorName = detectorName;
 }
 
 // Writes the fitted efficiency curve into a GEOM block that already has its header and model name.
@@ -2174,10 +2195,10 @@ void CAMIO::WriteEfficiencyFit(std::vector<uint8_t> &block) const
 
 // Generates the GEOM (efficiency) block from `writeEfficiencyModel`/`writeEfficiencyPoints`.
 //
-// EXPERIMENTAL: the field layout mirrors ReadGeometryBlock()'s interpretation (which has been
-// used successfully against real Genie 2000 CNF files for reading), but this write path has only
-// been round-tripped against this same class's read implementation - not validated against real
-// Canberra/Mirion Genie 2000 software.
+// Validated against real Genie 2000: it reads the efficiency points written here, and offers its
+// "Empirical", "Dual" and "Interpolated" models for the curve `WriteEfficiencyFit(...)` adds.
+// (It also offers "Linear" for its own files, which additionally carry six floats at record offset
+// 599 whose meaning has not been worked out - see `sm_geom_fit_ln_e_coeffs_offset`.)
 std::vector<uint8_t> CAMIO::GenerateGeometryBlock(size_t loc)
 {
     if( writeEfficiencyPoints.size() > sm_max_efficiency_points )
@@ -2198,8 +2219,17 @@ std::vector<uint8_t> CAMIO::GenerateGeometryBlock(size_t loc)
                              static_cast<size_t>(entSize) * numPoints;
 
     // Every block in every Genie-produced file examined starts on, and is a multiple of, 512
-    //  bytes; pad to keep that invariant (real Genie GEOM blocks are a flat 0x1000).
-    const size_t blockSize = ((usedSize + 0x1FF) / 0x200) * 0x200;
+    //  bytes; pad to keep that invariant.
+    //
+    // The block must also actually contain the record its own header declares.  The header copies
+    //  a real file's `recSize` of 0x0F02 verbatim (see `GenerateBlockHeader`), so the record runs
+    //  to `block_header_size + recOffset + recSize` whatever the entry count - sizing the block
+    //  from the entries alone left it ending 1874 bytes short of that for a 20-point curve, and a
+    //  reader walking the record would have run into the next block, or off the end of the file
+    //  when GEOM was the last block.  All three real files satisfy this bound.
+    const size_t recordEnd = static_cast<size_t>(block_header_size)
+                              + static_cast<size_t>(recOffset) + sm_geom_rec_size;
+    const size_t blockSize = ((std::max(usedSize,recordEnd) + 0x1FF) / 0x200) * 0x200;
 
     std::vector<uint8_t> block(blockSize, 0);
 
@@ -2264,6 +2294,21 @@ std::vector<uint8_t> CAMIO::GenerateGeometryBlock(size_t loc)
     return block;
 }
 
+namespace
+{
+  /** Saturates a peak's channel number into the uint16 the DISP block stores it in.
+
+   `GeneratePeakBlock()` and `GenerateDispBlock()` must agree byte-for-byte on a peak's channel
+   range - they describe the same ROI from two different blocks, and Genie reads both - so both
+   go through this rather than clamping their own way.
+   */
+  uint16_t clamp_peak_channel( const int channel )
+  {
+    return static_cast<uint16_t>( std::max(0, std::min(channel, 0xFFFF)) );
+  }
+}//namespace
+
+
 void CAMIO::AddPeak(const Peak& peak)
 {
     writePeaks.push_back(peak);
@@ -2277,10 +2322,14 @@ void CAMIO::AddPeaks(const std::vector<Peak>& peaks_in)
 // Generates the PEAK block from `writePeaks`.
 //
 // The block header mirrors the PEAK block of a real Genie-produced CNF (headSize 0x30,
-// recOffset 227, recSize 214, commonFlag 0x0500, 512-byte aligned size), and the record layout
-// matches `ReadPeaksBlock()`/`GetPeaks()`.  See `AddPeak()` for how little of this could be
-// validated: the one real PEAK block available holds a single all-zero record, so the field
-// offsets within a record are round-tripped against this class only.
+// recOffset 243, recSize 248, commonFlag 0x0500, 512-byte aligned size) - `peakBlockMatchesReal-
+// GenieLayout` in InterSpec's test_ExportCAM.cpp checks it word for word against cs137.CNF.
+//
+// The field offsets within a record come from the two Genie files that have *populated* PEAK
+// blocks: Ba-133.cnf (23 records, recSize 240) and cs137.CNF (one record, recSize 248).  The
+// third file available, Q_C_UCRM125A_OSL_K_..., has a single all-zero record and says nothing
+// about the layout.  Real Genie 2000 reads peaks written by this function - but only alongside
+// the DISP block `CreateFile()` writes with it; see `sm_disp_rec_size`.
 std::vector<uint8_t> CAMIO::GeneratePeakBlock(size_t loc)
 {
     const uint16_t recOffset = 0x00F3;   //243, matching RecordSize::PEAK's source file
@@ -2315,7 +2364,8 @@ std::vector<uint8_t> CAMIO::GeneratePeakBlock(size_t loc)
     //  these into every file with a populated PEAK block, and appears to use them to decide a peak
     //  search/fit was actually performed - without them it ignores the records entirely.  Offsets
     //  and strings are copied verbatim from Genie-written files (cs137.CNF and Ba-133.cnf, which
-    //  agree on all of this apart from the fit version and the timestamps we leave zeroed).
+    //  agree on all of this apart from the fit version, and the timestamps, which come from
+    //  `analysisTime` and are simply not written when it is unset).
     const auto put_string = [&block]( const size_t offset, const char * const str ){
         const size_t len = std::strlen( str );
         if( (offset + len) > block.size() )
@@ -2371,10 +2421,17 @@ std::vector<uint8_t> CAMIO::GeneratePeakBlock(size_t loc)
         // Note: `Width` is a 16-bit field.  Writing it as a longword would run into `Continuum`
         //  at 0x0C and silently zero it - the byte budget only works if this is 16 bits, which is
         //  also what `GetPeaks()` assumes.
-        const uint32_t left = (p.LeftChannel > 0) ? static_cast<uint32_t>(p.LeftChannel) : 0u;
-        const int width_int = (p.RightChannel >= p.LeftChannel) ? (p.RightChannel - p.LeftChannel + 1) : 1;
+        //
+        // Both ends go through `clamp_peak_channel(...)`, the same way `GenerateDispBlock()` does
+        //  them, so the two blocks can never describe different channel ranges for one peak.  The
+        //  left channel used to be written unclamped and the width derived from the unclamped
+        //  values, which for a negative or >65535 channel put a range in PEAK that DISP disagreed
+        //  with (and, for >65535, stopped a peak from matching even itself in the multiplet scan).
+        const uint16_t left = clamp_peak_channel( p.LeftChannel );
+        const uint16_t right = clamp_peak_channel( p.RightChannel );
+        const int width_int = (right >= left) ? (static_cast<int>(right) - static_cast<int>(left) + 1) : 1;
         const uint16_t width = static_cast<uint16_t>( std::min(width_int, 0xFFFF) );
-        enter_CAM_value( left, block, recPos + static_cast<size_t>(PeakParameterLocation::LeftChannel), cam_type::cam_longword );
+        enter_CAM_value( static_cast<uint32_t>(left), block, recPos + static_cast<size_t>(PeakParameterLocation::LeftChannel), cam_type::cam_longword );
         enter_CAM_value( width, block, recPos + static_cast<size_t>(PeakParameterLocation::Width), cam_type::cam_word );
 
         // Fields Genie fills on every peak of every file checked, but that are not simply more of
@@ -2404,13 +2461,12 @@ std::vector<uint8_t> CAMIO::GeneratePeakBlock(size_t loc)
 
         //  Compare the same clamped channel numbers `GenerateDispBlock()` groups on, so a peak is
         //  never flagged as a singlet while DISP counts it in a multi-peak region.
-        const uint16_t clamped_left = static_cast<uint16_t>(left & 0xFFFFu);
         size_t multiplet_index = 0, multiplet_count = 0;
         for( size_t j = 0; j < numPeaks; ++j )
         {
             const Peak &o = writePeaks[j];
-            const uint16_t o_left = static_cast<uint16_t>( std::max(0, std::min(o.LeftChannel, 0xFFFF)) );
-            if( (o_left != clamped_left) || (o.RightChannel != p.RightChannel) )
+            if( (clamp_peak_channel(o.LeftChannel) != left)
+                || (clamp_peak_channel(o.RightChannel) != right) )
               continue;
 
             if( j < i )
@@ -2445,8 +2501,8 @@ std::vector<uint8_t> CAMIO::GenerateDispBlock(size_t loc)
     std::vector<Region> regions;
     for( const Peak &p : writePeaks )
     {
-        const uint16_t left = static_cast<uint16_t>( std::max(0, std::min(p.LeftChannel, 0xFFFF)) );
-        const uint16_t right = static_cast<uint16_t>( std::max(0, std::min(p.RightChannel, 0xFFFF)) );
+        const uint16_t left = clamp_peak_channel( p.LeftChannel );
+        const uint16_t right = clamp_peak_channel( p.RightChannel );
 
         const auto pos = std::find_if( begin(regions), end(regions), [left,right]( const Region &r ){
             return (r.left == left) && (r.right == right);
@@ -2978,7 +3034,10 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
                                         ((usedSize + 0x1FFu) / 0x200u) * 0x200u );
             values[1] = static_cast<uint16_t>(totalSize & 0xFFFF);
             values[2] = static_cast<uint16_t>((totalSize >> 16) & 0xFFFF);
-            values[19] = static_cast<uint16_t>(usedSize & 0xFFFF);
+            // Saturate rather than wrap: this field is 16 bits, and masking turned a
+            //  264-peak block's used size of 65779 into 243 - a value a reader would take
+            //  as a nearly-empty block.  Clamping at least keeps it monotonic.
+            values[19] = static_cast<uint16_t>( std::min<uint32_t>(usedSize, 0xFFFFu) );
             break;
         }
 
@@ -3011,7 +3070,10 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
                                         ((usedSize + 0x1FFu) / 0x200u) * 0x200u );
             values[1] = static_cast<uint16_t>(totalSize & 0xFFFF);
             values[2] = static_cast<uint16_t>((totalSize >> 16) & 0xFFFF);
-            values[19] = static_cast<uint16_t>(usedSize & 0xFFFF);
+            // Saturate rather than wrap: this field is 16 bits, and masking turned a
+            //  264-peak block's used size of 65779 into 243 - a value a reader would take
+            //  as a nearly-empty block.  Clamping at least keeps it monotonic.
+            values[19] = static_cast<uint16_t>( std::min<uint32_t>(usedSize, 0xFFFFu) );
             break;
         }
 
@@ -3033,7 +3095,7 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
             values[6] = 0x000D;
             values[7] = 0x2400;
             values[11] = 1;              // numRec
-            values[12] = 0x0F02;         // recSize (3842, as in a real block)
+            values[12] = sm_geom_rec_size;  // recSize (3842, as in a real block)
             values[13] = recOffsetGeom;  // recOffset
             values[14] = 0x7FFF;
             values[15] = 0x0000;
@@ -3044,15 +3106,21 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
                                        static_cast<uint32_t>(recOffsetGeom) +
                                        static_cast<uint32_t>(entOffsetGeom) +
                                        static_cast<uint32_t>(entSizeGeom) * numPointsGeom;
-            // Pad to a 512-byte multiple, to match `GenerateGeometryBlock()` and every real file.
-            const uint32_t totalSize = ((usedSize + 0x1FF) / 0x200) * 0x200;
+            // Pad to a 512-byte multiple, and to at least the end of the record declared above -
+            //  keep this in step with `GenerateGeometryBlock()`, which allocates the buffer.
+            const uint32_t recordEnd = static_cast<uint32_t>(values[4])
+                                        + static_cast<uint32_t>(recOffsetGeom) + sm_geom_rec_size;
+            const uint32_t totalSize = ((std::max(usedSize,recordEnd) + 0x1FF) / 0x200) * 0x200;
 
             // The block-size field at 0x06 is 32 bits (values[1] is its low word, values[2] its
             //  high word - see the SPEC case below); writing only the low word silently wrapped
             //  past 4080 efficiency points.
             values[1] = static_cast<uint16_t>(totalSize & 0xFFFF);
             values[2] = static_cast<uint16_t>((totalSize >> 16) & 0xFFFF);
-            values[19] = static_cast<uint16_t>(usedSize & 0xFFFF);
+            // Saturate rather than wrap: this field is 16 bits, and masking turned a
+            //  264-peak block's used size of 65779 into 243 - a value a reader would take
+            //  as a nearly-empty block.  Clamping at least keeps it monotonic.
+            values[19] = static_cast<uint16_t>( std::min<uint32_t>(usedSize, 0xFFFFu) );
             break;
         }
 

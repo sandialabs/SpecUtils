@@ -540,7 +540,7 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
                 cam_obj.AddGPSData(summed->latitude(), summed->longitude(), summed->speed()); // if there is no position time stamp
         }
         //enter the data - unless the caller asked for a library/calibration-only file, in which
-        //  case no SPEC (or SAMP) block is written at all, matching the shape of the `.nlb` files
+        //  case no SPEC block is written, matching the shape of the `.nlb` files
         //  Genie's own Library Editor produces.
         if( !omit_spectrum )
           cam_obj.AddSpectrum(gamma_channel_counts);

@@ -25,7 +25,6 @@
 #include <map>
 #include <memory>
 #include <chrono>
-#include <optional>
 #include <utility>
 #include "DateTime.h"
 
@@ -275,8 +274,10 @@ public:
         NUCL = 0x023B,
         NLINES = 0x0085,
         //248; from a Genie-produced CNF that actually contains peak records (CNFreader's
-        // Examples/cs137.CNF).  Note this is not universal - another real file uses 214 - but
-        // both writer and reader take it from the block header, so it only needs to be plausible.
+        // Examples/cs137.CNF).  Note this is not universal - the three real files available use
+        // three different values (248, 240 and 214) - but both writer and reader take it from the
+        // block header, so it only needs to be plausible.  The per-record field offsets are the
+        // same in the two files whose records are populated (the 248 and 240 ones).
         PEAK = 0x00F8
     };
 
@@ -355,16 +356,20 @@ public:
         Efficiency = 0x20,
         /** Uncertainty on that efficiency, and again at `EfficiencyUncertaintyAgain`. */
         EfficiencyUncertainty = 0x38,
-        /** Index of the peak within its multiplet; 0 for a peak fitted alone.  Genie's values run
-         0-3 with no discernible ordering, so what it counts was not determined.
+        /** A byte whose meaning was not determined.  Genie's values run 0-3 with no discernible
+         ordering, and - contrary to what "multiplet index" would suggest - it is NOT zero for
+         every peak fitted alone: 6 of Ba-133.cnf's 23 records hold 1 here alongside a
+         `MultipletFlag` of 0x10.  What gets written (the peak's index within its ROI, 0 for a
+         singlet) is therefore a guess that merely stays inside the observed range.
          */
         MultipletIndex = 0x28,
         /** 0x10 for a peak fitted alone in its ROI, 0xD8 for one of several peaks sharing a ROI.
          Holds without exception across every peak of every Genie file checked.
          */
         MultipletFlag = 0x29,
-        /** 0x03 alongside a `MultipletFlag` of 0xD8, and 0 alongside 0x10 - so the three bytes
-         0x28-0x2A read as one word/longword per peak (0x0003D8nn vs 0x00001000).
+        /** 0x03 alongside a `MultipletFlag` of 0xD8, and 0 alongside 0x10, without exception in
+         the files checked - so 0x28-0x2A plausibly read as one longword per peak, 0x0003D8nn for
+         a peak sharing its ROI and 0x000010nn for one fitted alone.
          */
         MultipletFlag2 = 0x2A,
         /** A longword, never zero in a real file: 1-6 rising with energy in the Ba-133 file, and
@@ -479,7 +484,10 @@ private:
      */
     static constexpr size_t sm_max_blocks = 28;
 
-    /** The most efficiency points a GEOM block can describe, bounded by its 32-bit size field. */
+    /** The most efficiency points a GEOM block may be given.  Not a hard format limit - the
+     block-size field is 32 bits - but the 16-bit "used size" at block offset 0x2E saturates at
+     1948 points, and no real file comes close to either.
+     */
     static constexpr size_t sm_max_efficiency_points = 4080;
 
     // GEOM block geometry, taken from a real Genie-written block (the Ba-133 test file):
@@ -487,6 +495,11 @@ private:
     static constexpr uint16_t sm_geom_rec_offset = 32;
     static constexpr uint16_t sm_geom_ent_offset = 0x04B2;
     static constexpr uint16_t sm_geom_ent_size = 33;
+    /** The record size the block header declares, copied from a real file.  The block has to be
+     big enough to hold it - see `GenerateGeometryBlock()`, where sizing from the entry count alone
+     left the declared record running off the end of the block.
+     */
+    static constexpr uint16_t sm_geom_rec_size = 0x0F02;
 
     /** Genie space-pads the GEOM model-name field out to this many bytes ("INTERPOL" followed by
      24 spaces in the Ba-133 file); writing only the name and leaving the rest zero also truncated
@@ -728,10 +741,10 @@ public:
     /** Adds a single energy/efficiency/efficiency-uncertainty point to be written
      into the file's GEOM block.  See also `AddEfficiencyPoints(...)`.
 
-     EXPERIMENTAL: this write path mirrors the field layout used by `ReadGeometryBlock()`/
-     `GetEfficiencyPoints()` (which has been used against real Genie 2000 CNF files), but the
-     GEOM-block write path itself has NOT been validated against real Canberra/Mirion Genie 2000
-     software - only round-tripped against this same class's read implementation.
+     Real Genie 2000 reads the points written here, and - once `AddEfficiencyFit(...)` has also
+     been called - offers its "Empirical" and "Dual" efficiency models for them.  Points written
+     with a zero `efficiencyUncertainty` leave Genie able to offer only "Interpolated", since it
+     weights its own fit by `1/sigma^2`; give every point a real uncertainty.
      */
     void AddEfficiencyPoint(const float energy, const float efficiency, const float efficiencyUncertainty);
     void AddEfficiencyPoints(const std::vector<EfficiencyPoint>& points);
@@ -934,9 +947,11 @@ struct CnfGenieExtras
      */
     std::vector<Peak> peaks;
 
-    /** If true, no spectrum (and hence no SPEC or SAMP block) is written - the result is a
-     nuclide-library / calibration-only CAM file, of the same shape as the `.nlb` files Genie's
-     Library Editor produces.
+    /** If true, no spectrum is written - the result is a nuclide-library / calibration-only CAM
+     file, of the same shape as the `.nlb` files Genie's Library Editor produces.
+
+     This leaves out the SPEC block.  A SAMP block is still written if the measurement has a title,
+     since `AddSampleTitle(...)` needs one to put it in.
 
      `SpecFile::write_cnf(...)` still needs a usable measurement to take the live/real times,
      detector type and energy calibration from; it just leaves the channel counts out.
