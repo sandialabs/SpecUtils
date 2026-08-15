@@ -246,9 +246,10 @@ void EnergyCalibration::check_lower_energies( const size_t num_channels,
                          " for the specified number of channels." );
   
   const size_t numsrc_channels = std::min( num_channels+1, channel_energies.size() );
-  for( size_t i = 1; i < numsrc_channels; ++i )
+  for( size_t i = 0; i < numsrc_channels; ++i )
   {
-    if( channel_energies[i] < channel_energies[i-1] )
+    if( !std::isfinite(channel_energies[i])
+        || (i && channel_energies[i] <= channel_energies[i-1]) )
       throw std::runtime_error( "EnergyCalibration::set_lower_channel_energy: invalid calibration"
                                 " passed in at channel " + std::to_string(i) );
   }
@@ -274,7 +275,14 @@ void EnergyCalibration::set_lower_channel_energy( const size_t num_channels,
     assert( numsrc_channels == channel_energies.size() );
     assert( channel_energies.size() >= 2 );
     assert( num_channels >= 2 );
-    (*energies)[num_channels] = 2.0f*channel_energies[num_channels-1] - channel_energies[num_channels-2];
+    const double upper_energy = 2.0*channel_energies[num_channels-1]
+                                - channel_energies[num_channels-2];
+    const float upper_float = static_cast<float>(upper_energy);
+    if( !std::isfinite(upper_energy) || !std::isfinite(upper_float)
+        || upper_float <= channel_energies[num_channels-1] )
+      throw runtime_error( "EnergyCalibration::set_lower_channel_energy: extrapolated upper"
+                           " channel energy is invalid" );
+    (*energies)[num_channels] = upper_float;
   }
   
   m_coefficients.clear();
@@ -295,15 +303,31 @@ void EnergyCalibration::set_lower_channel_energy( const size_t num_channels,
   
   check_lower_energies( num_channels, channel_energies );
   assert( channel_energies.size() >= num_channels );
-  
-  auto energies = std::make_shared<std::vector<float>>( std::move(channel_energies) );
-  
-  if( energies->size() < (num_channels+1) )
+
+  // Compute, and validate, the extrapolated upper channel edge _before_ moving `channel_energies`,
+  //  so that throwing here doesnt leave the callers vector in a moved-from state.
+  const bool need_upper_energy = (channel_energies.size() < (num_channels+1));
+  float upper_float = 0.0f;
+  if( need_upper_energy )
   {
+    // `check_lower_energies` requires `num_channels <= channel_energies.size()`, so getting here
+    //  means the sizes are equal, and the >1 check above means there are at least two entries.
     assert( num_channels >= 2 );
-    energies->push_back( 2.0f*((*energies)[num_channels-1]) - ((*energies)[num_channels-2]) );
+    assert( channel_energies.size() == num_channels );
+    const double upper_energy = 2.0*channel_energies[num_channels-1]
+                                - channel_energies[num_channels-2];
+    upper_float = static_cast<float>(upper_energy);
+    if( !std::isfinite(upper_energy) || !std::isfinite(upper_float)
+        || upper_float <= channel_energies[num_channels-1] )
+      throw runtime_error( "EnergyCalibration::set_lower_channel_energy: extrapolated upper"
+                           " channel energy is invalid" );
   }
-  
+
+  auto energies = std::make_shared<std::vector<float>>( std::move(channel_energies) );
+
+  if( need_upper_energy )
+    energies->push_back( upper_float );
+
   if( energies->size() > (num_channels+1) )
     energies->resize( num_channels+1 );
   
@@ -812,14 +836,20 @@ std::shared_ptr< const std::vector<float> > polynomial_binning( const vector<flo
     double val = 0.0;
     for( size_t c = 0; c < ncoeffs; ++c )
       val += coeffs[c] * pow( static_cast<double>(i), static_cast<double>(c) );
-    answer->operator[](i) = static_cast<float>( val );
-    
+
+    const float float_val = static_cast<float>( val );
+    if( !std::isfinite(val) || !std::isfinite(float_val) )
+      throw std::runtime_error( "Polynomial equation produced a non-finite channel energy"
+                                " at channel " + std::to_string(i) );
+    answer->operator[](i) = float_val;
+
     //Note, #apply_deviation_pair will also check for strickly increasing, but _after_ applying
     //  deviation pairs (since there you could have a FRF that is only valid with the dev pairs)
-    // \ToDo: check for infs and NaNs too
     // \ToDo: could take derivative of coefficients instead and use that to check if negative
     //        or zero derivative anywhere, and see if this is faster than checking every entry.
-    if( dev_pairs.empty() && (val <= prev_energy) )
+    // Note the comparison is against the `float` we actually store, not the `double` we computed
+    //  it from, so two channels that differ as doubles but collide as floats are caught.
+    if( dev_pairs.empty() && (float_val <= prev_energy) )
     {
       string msg = "Invalid polynomial equation {";
       for( size_t c = 0; c < ncoeffs; ++c )
@@ -827,14 +857,25 @@ std::shared_ptr< const std::vector<float> > polynomial_binning( const vector<flo
       msg += "} starting at channel " + std::to_string(i);
       throw std::runtime_error( msg );
     }//if( invalid energy calibration )
-    
-    prev_energy = val;
+
+    prev_energy = float_val;
   }//for( loop over bins, i )
-  
+
   if( dev_pairs.empty() )
     return answer;
-  
-  return apply_deviation_pair( *answer, dev_pairs );
+
+  // `apply_deviation_pair` checks the corrected energies itself, but it has early-return paths
+  //  (an empty spline, or every energy above the last spline node) that skip those checks - and
+  //  the loop above skipped its own check because `dev_pairs` is non-empty.  So re-check here.
+  const auto corrected = apply_deviation_pair( *answer, dev_pairs );
+  for( size_t i = 0; i < corrected->size(); ++i )
+  {
+    if( !std::isfinite((*corrected)[i])
+        || (i && ((*corrected)[i] <= (*corrected)[i-1])) )
+      throw std::runtime_error( "Polynomial equation is invalid after applying deviation pairs"
+                                " at channel " + std::to_string(i) );
+  }
+  return corrected;
 }//std::shared_ptr< const std::vector<float> > polynomial_binning( const vector<float> &coefficients, size_t nbin )
   
   
@@ -862,12 +903,15 @@ std::shared_ptr< const std::vector<float> > fullrangefraction_binning( const vec
       val += coeffs[c] * pow(x,static_cast<float>(c) );
     val += low_e_coef / (1.0 + 60.0*x);
     
-    answer->operator[](i) = static_cast<float>( val );
+    const float float_val = static_cast<float>( val );
+    if( !std::isfinite(val) || !std::isfinite(float_val) )
+      throw std::runtime_error( "FullRangeFraction equation produced a non-finite channel energy"
+                                " at channel " + std::to_string(i) );
+    answer->operator[](i) = float_val;
     
     //Note, #apply_deviation_pair will also check for strictly increasing, but _after_ applying
     //  deviation pairs (since there you could have a FRF that is only valid with the dev pairs)
-    // \ToDo: check for infs and NaNs too
-    if( dev_pairs.empty() && (val <= prev_energy) )
+    if( dev_pairs.empty() && (float_val <= prev_energy) )
     {
       string msg = "Invalid FullRangeFraction equation {";
       for( size_t c = 0; c < ncoeffs; ++c )
@@ -875,12 +919,22 @@ std::shared_ptr< const std::vector<float> > fullrangefraction_binning( const vec
       msg += "} starting at channel " + std::to_string(i);
       throw std::runtime_error( msg );
     }//if( invalid energy calibration )
+
+    prev_energy = float_val;
   }//for( loop over bins, i )
   
   if( dev_pairs.empty() )
     return answer;
-  
-  return apply_deviation_pair( *answer, dev_pairs );
+
+  const auto corrected = apply_deviation_pair( *answer, dev_pairs );
+  for( size_t i = 0; i < corrected->size(); ++i )
+  {
+    if( !std::isfinite((*corrected)[i])
+        || (i && (*corrected)[i] <= (*corrected)[i-1]) )
+      throw std::runtime_error( "FullRangeFraction equation is invalid after applying deviation"
+                                " pairs at channel " + std::to_string(i) );
+  }
+  return corrected;
 }//std::shared_ptr< const std::vector<float> > fullrangefraction_binning(...)
   
   
@@ -1008,7 +1062,10 @@ shared_ptr<const vector<float>> apply_deviation_pair( const vector<float> &binni
       ex[i] += static_cast<float>( ((node.a*h + node.b)*h + node.c)*h + node.y );
     }
     
-    //ToDo: Check for infs and NaNs here
+    if( !std::isfinite(ex[i]) )
+      throw std::runtime_error( "apply_deviation_pair: application of deviation pairs produced"
+                                " a non-finite energy at channel " + std::to_string(i) );
+
     if( i && (ex[i] <= ex[i-1]) )
     {
       if( binning.at(i-1) >= binning.at(i) )
@@ -2257,7 +2314,8 @@ bool write_CALp_file( std::ostream &output, const shared_ptr<const EnergyCalibra
   if( !cal || !cal->valid() )
     return false;
   
-  if( SpecUtils::contains( detector_name, "\n\r") )
+  if( detector_name.find('\n') != std::string::npos
+      || detector_name.find('\r') != std::string::npos )
     throw runtime_error( "Detector name cant contain newline." );
   
   // RIght now well

@@ -24,6 +24,9 @@ target_link_libraries( file_parse_fuzz PRIVATE SpecUtils $<$<CXX_COMPILER_ID:Cla
 add_executable( fuzz_str_utils fuzz_str_utils.cpp )
 target_link_libraries( fuzz_str_utils PRIVATE SpecUtils $<$<CXX_COMPILER_ID:Clang>:-fsanitize=fuzzer,address,undefined -fprofile-instr-generate -fcoverage-mapping> )
 
+add_executable( fuzz_cam_io fuzz_cam_io.cpp )
+target_link_libraries( fuzz_cam_io PRIVATE SpecUtils $<$<CXX_COMPILER_ID:Clang>:-fsanitize=fuzzer,address,undefined -fprofile-instr-generate -fcoverage-mapping> )
+
 if( SpecUtils_ENABLE_URI_SPECTRA )
   add_executable( fuzz_uri_spectrum fuzz_uri_spectrum.cpp )
   target_link_libraries( fuzz_uri_spectrum PRIVATE SpecUtils $<$<CXX_COMPILER_ID:Clang>:-fsanitize=fuzzer,address,undefined -fprofile-instr-generate -fcoverage-mapping> )

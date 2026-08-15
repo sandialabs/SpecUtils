@@ -38,6 +38,7 @@
 
 #include "3rdparty/date/include/date/date.h"
 
+#include "SpecUtils/CAMIO.h"
 #include "SpecUtils/DateTime.h"
 #include "SpecUtils/SpecFile.h"
 #include "SpecUtils/ParseUtils.h"
@@ -339,7 +340,8 @@ bool SpecFile::load_from_cnf( std::istream &input )
 
 
 bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
-                          const std::set<int> &det_nums ) const
+                          const std::set<int> &det_nums,
+                          const CAMInputOutput::CnfGenieExtras *genie_extras ) const
 {
   //First, lets take care of some boilerplate code.
   std::unique_lock<std::recursive_mutex> scoped_lock(mutex_);
@@ -464,13 +466,62 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
             cam_obj.AddSampleTitle(expectsString);
         }
         
- //TODO: implement converted shape calibration information into CNF files 
-        //shape calibration, just use the default values for NaI detectors if the type cotains any NaI, if not use Ge defaults
+        //shape calibration: use the real FWHM equation if one was supplied via genie_extras,
+        //  otherwise fall back to the default values for NaI/Ge detectors, based on detector type.
         const string& detector_type = summed->detector_type();
         cam_obj.AddDetectorType(detector_type);
+        if( genie_extras && genie_extras->shape_cal )
+          cam_obj.AddShapeCalibration( genie_extras->shape_cal.first, genie_extras->shape_cal.second );
+
+        if( genie_extras && genie_extras->low_tail_cal )
+          cam_obj.AddLowTailCalibration( genie_extras->low_tail_cal.first,
+                                         genie_extras->low_tail_cal.second );
 
         //energy calibration
-        cam_obj.AddEnergyCalibration(energy_cal_coeffs);
+        //  Note: the calibration can only be left out of a file that carries no spectrum; channel
+        //  counts are not interpretable without it.  Call AddEnergyCalibration({}) rather than
+        //  skipping the call, so the ACQP block still gets its "POLY"/"keV" strings and an
+        //  ECALFLAGS of 2 ("shape calibration only") instead of 0 ("nothing calibrated"), which
+        //  would also disclaim the shape calibration we just wrote.
+        const bool omit_spectrum = (genie_extras && genie_extras->omit_spectrum);
+        const bool omit_energy_cal = (omit_spectrum && genie_extras->omit_energy_calibration);
+
+        if( omit_energy_cal )
+          cam_obj.AddEnergyCalibration( {} );
+        else
+          cam_obj.AddEnergyCalibration( energy_cal_coeffs );
+
+        // GENIE nuclide library and efficiency curve, if provided.
+        if( genie_extras )
+        {
+          // AddLineAndNuclide(...) defers actually creating each nuclide's library record until
+          // CreateCAMFile() runs (after all lines have been added), and Genie's key-line selection
+          // (AssignKeyLines()) runs automatically at that point too - so this is the only safe,
+          // well-exercised way to build up a nuclide library (see CAMIO::AddLine(...) for why
+          // adding already-created nuclide records and lines separately is not safe).
+          for( const CAMInputOutput::CnfGenieExtras::LibraryLine &ll : genie_extras->library_lines )
+          {
+            cam_obj.AddLineAndNuclide( ll.energy, ll.yield, ll.nuclide_name,
+                                       ll.half_life_seconds, "S", ll.no_weight_mean,
+                                       ll.energy_uncert, ll.yield_uncert, ll.half_life_uncert_seconds,
+                                       ll.is_key_line );
+          }
+
+          if( genie_extras->eff_model != CAMInputOutput::CAMIO::EfficiencyModel::NotReadin )
+            cam_obj.AddEfficiencyModel( genie_extras->eff_model );
+
+          if( !genie_extras->eff_points.empty() )
+            cam_obj.AddEfficiencyPoints( genie_extras->eff_points );
+
+          if( !genie_extras->eff_fit_coeffs.empty() )
+            cam_obj.AddEfficiencyFit( genie_extras->eff_fit_coeffs,
+                                      genie_extras->eff_fit_reference_energy,
+                                      genie_extras->eff_fit_chi_square,
+                                      genie_extras->eff_detector_name );
+
+          if( !genie_extras->peaks.empty() )
+            cam_obj.AddPeaks( genie_extras->peaks );
+        }//if( genie_extras )
 
         //times
         if (!SpecUtils::is_special(start_time)) {
@@ -488,12 +539,19 @@ bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
             else
                 cam_obj.AddGPSData(summed->latitude(), summed->longitude(), summed->speed()); // if there is no position time stamp
         }
-        //enter the data 
-        cam_obj.AddSpectrum(gamma_channel_counts);
+        //enter the data - unless the caller asked for a library/calibration-only file, in which
+        //  case no SPEC block is written, matching the shape of the `.nlb` files
+        //  Genie's own Library Editor produces.
+        if( !omit_spectrum )
+          cam_obj.AddSpectrum(gamma_channel_counts);
 
-        auto& cnf_file = cam_obj.CreateFile();
+        auto& cnf_file = cam_obj.CreateCAMFile();
         //write the file
          output.write((char* )cnf_file.data(), cnf_file.size());
+
+        //A short write (full disk, bad stream) must not be reported as success.
+        if( !output.good() )
+          return false;
     }catch( std::exception &e )
     {
 #if( PERFORM_DEVELOPER_CHECKS )
