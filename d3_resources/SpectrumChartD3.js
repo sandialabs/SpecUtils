@@ -440,9 +440,16 @@ SpectrumChartD3 = function(elem, options) {
           const pageX = self.touchPageStart[0], pageY = self.touchPageStart[1];
           const energy = self.xScale.invert(x);
           const count = self.yScale.invert(y);
+          // Refresh before handler() so the emitted leftclicked carries this tap's nuclide.
+          if( self.kineticRefLines )
+            self.handleUpdateKineticRefLineUpdate( [x, y] );
           const handler = self.getMouseUpOrSingleFingerUpHandler([x, y, pageX, pageY, energy, count], false, true);
           handler();
           self.touchStart = null;
+
+          // handleVisTouchEnd never ran, so the box handleVisTouchMove hid was never restored.
+          self.updateMouseCoordText( [x, y] );
+          self.updatePeakInfo( [x, y] );
         } catch (e) {
           console.warn("chartTouchEndSafety: synthesizing tap failed:", e);
         }
@@ -614,6 +621,7 @@ SpectrumChartD3 = function(elem, options) {
       self.currentKineticRefLine = null;
       self.candidateKineticRefLines = [];
       self.currentKineticRefLineIndex = 0;
+      self.lastKineticTapPos = null;
       self.stopKineticRefLineCycling();
       self.drawRefGammaLines();
     }
@@ -623,6 +631,8 @@ SpectrumChartD3 = function(elem, options) {
   this.candidateKineticRefLines = [];
   this.currentKineticRefLineIndex = 0;
   this.kineticRefLineCycleTimer = null;
+  this.lastKineticTapPos = null;
+  this.lastKineticTapDomain = null;
   
   // Register global keyboard handler
   d3.select(window).on("keydown.chart" + this.chart.id, this.keydown());
@@ -2342,7 +2352,12 @@ SpectrumChartD3.prototype.handleChartMouseLeave = function() {
       
       if( self.currentKineticRefLine ){
         self.currentKineticRefLine = null;
+        self.candidateKineticRefLines = [];
+        self.currentKineticRefLineIndex = 0;
+        self.lastKineticTapPos = null;
+        self.stopKineticRefLineCycling();
         self.drawRefGammaLines();
+        self.updateKineticRefLineCandidateDisplay();
       }
 
       self.mousedOverRefLine = null;
@@ -2609,6 +2624,10 @@ SpectrumChartD3.prototype.getMouseUpOrSingleFingerUpHandler = function( coords, 
       self.showRoiDragOption(self.mouseDownRoi, [coords[0],coords[1]], true, !!isTouch);
     }else{
       self.unhighlightPeak(null);
+
+      // updatePeakInfo() keys off highlightedPeak and already ran (in touchend/mouseup) before
+      // this deferred handler cleared it; without this the old box lingers until the next tap.
+      self.updatePeakInfo( [coords[0], coords[1]] );
     }
 
     self.mousewait = null;
@@ -2620,6 +2639,10 @@ SpectrumChartD3.prototype.currentRefLineInfoStr = function () {
   let ref_line = "";
   if( this.mousedOverRefLine && this.mousedOverRefLine.__data__ && this.mousedOverRefLine.__data__.parent )
     ref_line = this.mousedOverRefLine.__data__.parent.parent;
+  else if( this.currentKineticRefLine && this.currentKineticRefLine.parent )
+    // Nothing hovered, but a dynamic line is showing - associate with it (touch has no hover).
+    // currentKineticRefLine is the src_lines group, so .parent matches the hover branch above.
+    ref_line = this.currentKineticRefLine.parent;
   return ref_line;
 }
 
@@ -3406,7 +3429,7 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
       const x = touchesT[0][0],
             y = touchesT[0][1],
             pageX = t[0].pageX,
-            pageY = t[0].pageY
+            pageY = t[0].pageY,
             currentTapEvent = d3.event,
             energy = self.xScale.invert(x),
             count = self.yScale.invert(y);
@@ -3441,6 +3464,31 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
           self.deleteTouchLine();
           self.unhighlightPeak(null);
         } else {
+          // Dynamic reference lines follow the cursor on desktop; touch has no hover, so refresh
+          // them here - synchronously, before 'leftclicked'/'doubleclicked' read
+          // currentRefLineInfoStr().  Skipped on the second tap of a double-tap (that branch
+          // above), which keeps the first tap's selection.  A repeat tap in the same spot cycles.
+          if( self.kineticRefLines ){
+            const tapPos = [x,y], domain = self.xScale.domain();
+            // Pixel position only means the same energy while the x-domain is unchanged; a pan or
+            // zoom between taps must recompute rather than cycle.
+            const sameDomain = (self.lastKineticTapDomain
+                                && (self.lastKineticTapDomain[0] === domain[0])
+                                && (self.lastKineticTapDomain[1] === domain[1]));
+            if( sameDomain && self.lastKineticTapPos
+                && (self.dist(tapPos,self.lastKineticTapPos) < tapRadius)
+                && self.candidateKineticRefLines && (self.candidateKineticRefLines.length > 1) ){
+              if( self.kineticRefLineCycleTimer )
+                self.stopKineticRefLineCycling();
+              else
+                self.cycleKineticRefLine(1);
+            }else{
+              self.handleUpdateKineticRefLineUpdate( tapPos );
+            }
+            self.lastKineticTapPos = tapPos;
+            self.lastKineticTapDomain = domain;
+          }//if( self.kineticRefLines )
+
           // Don't replace a still-pending mousewait: Android fires touchend twice for many taps and the second would cancel-and-replace the first's timer, losing the original tap coordinates.
           if( !self.mousewait ){
             self.mousewait = window.setTimeout(
@@ -3459,7 +3507,8 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
           self.lastTapEvent = currentTapEvent;
           self.lastTapEvent.energy = energy;
           self.lastTapEvent.count = count;
-          self.lastTapEvent.visCoordinates = [t[0][0], t[0][1], t[0][0] + self.padding.leftComputed, t[0][1] + self.padding.topComputed];
+          // x,y are touchesT[0][*] (vis coords); t[0] is a Touch, so t[0][0] was undefined here.
+          self.lastTapEvent.visCoordinates = [x, y, x + self.padding.leftComputed, y + self.padding.topComputed];
         }else{
           self.lastTapEvent = null;
         }
@@ -4287,13 +4336,17 @@ SpectrumChartD3.prototype.setKineticReferenceLines = function( data ) {
 }//SpectrumChartD3.prototype.setKineticReferenceLines
 
 
-SpectrumChartD3.prototype.handleUpdateKineticRefLineUpdate = function(){
-  const m = this.getMousePos(); // Get current mouse position for energy calculation
-  if( !this.kineticRefLines || !this.kineticRefLines.ref_lines || !this.kineticRefLines.ref_lines.length || ((m[0] == 0) && (m[1] == 0)) ){
+SpectrumChartD3.prototype.handleUpdateKineticRefLineUpdate = function( posOverride ){
+  // posOverride: callers with no live d3.event (deferred handlers) supply the position.
+  const m = posOverride ? posOverride : this.getMousePos();
+  // (0,0) is getMousePos()'s failure return, not a legitimate corner tap.
+  const badPos = (!posOverride && (m[0] == 0) && (m[1] == 0));
+  if( !this.kineticRefLines || !this.kineticRefLines.ref_lines || !this.kineticRefLines.ref_lines.length || badPos ){
     if( this.currentKineticRefLine ){
       this.currentKineticRefLine = null;
       this.candidateKineticRefLines = [];
       this.currentKineticRefLineIndex = 0;
+      this.lastKineticTapPos = null;
       this.stopKineticRefLineCycling();
       this.drawRefGammaLines();
       this.updateKineticRefLineCandidateDisplay();
@@ -4389,10 +4442,11 @@ SpectrumChartD3.prototype.handleUpdateKineticRefLineUpdate = function(){
   if( candidateParentsChanged ) {
     // Lines actually changed - reset everything including cycling
     this.candidateKineticRefLines = newCandidates;
+    this.lastKineticTapPos = null;   // pixel-based, so stale once the candidates change
     this.currentKineticRefLineIndex = 0;
     this.currentKineticRefLine = newCandidates.length > 0 ? newCandidates[0].lines : null;
     this.drawRefGammaLines();
-    this.updateMouseCoordText();
+    this.updateMouseCoordText( posOverride );
     
     // Only restart auto-cycling if candidates actually changed
     if( this.candidateKineticRefLines.length > 1 ) {
@@ -4417,7 +4471,7 @@ SpectrumChartD3.prototype.handleUpdateKineticRefLineUpdate = function(){
     // Update current line reference and display
     this.currentKineticRefLine = this.candidateKineticRefLines.length > 0 ? this.candidateKineticRefLines[this.currentKineticRefLineIndex].lines : null;
     this.drawRefGammaLines();
-    this.updateMouseCoordText();
+    this.updateMouseCoordText( posOverride );
   }
 }//SpectrumChartD3.prototype.handleUpdateKineticRefLineUpdate
 
@@ -4751,13 +4805,13 @@ SpectrumChartD3.prototype.addMouseInfoBox = function(){
   this.mouseInfo.append("g").append("text");
 }
 
-SpectrumChartD3.prototype.updateMouseCoordText = function() {
+SpectrumChartD3.prototype.updateMouseCoordText = function( posOverride ) {
   var self = this;
 
-  if ( !d3.event || !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length )
+  if ( (!d3.event && !posOverride) || !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length )
     return;
 
-  const p = self.getMousePos();
+  const p = posOverride ? posOverride : self.getMousePos();
 
   if( !p ){
     self.mousedOverRefLine = null;
@@ -10766,13 +10820,14 @@ SpectrumChartD3.prototype.getPeakInfoObject = function(roi, energy, spectrumInde
   return info;
 }
 
-SpectrumChartD3.prototype.updatePeakInfo = function() {
+SpectrumChartD3.prototype.updatePeakInfo = function( posOverride ) {
   const self = this;
   
   if (!this.rawData || !this.rawData.spectra || !this.rawData.spectra.length)
     return;
   
-  const energy = this.xScale.invert( this.getMousePos()[0] );
+  // posOverride: deferred callers have no d3.event, so getMousePos() cannot find the position.
+  const energy = this.xScale.invert( (posOverride ? posOverride : this.getMousePos())[0] );
   let resultROI, spectrumIndex;
   
   // If a peak is highlighted by the mouse, we will choose that peak to display infor for
@@ -10802,11 +10857,16 @@ SpectrumChartD3.prototype.updatePeakInfo = function() {
     this.hidePeakInfo();// No peak found, so hide the info box
   }else{
     const info = this.getPeakInfoObject(resultROI, energy, spectrumIndex);
-    this.displayPeakInfo(info);
+    let clientX;
+    if( posOverride && self.svg && self.svg[0] && self.svg[0][0] ){
+      const rect = self.svg[0][0].getBoundingClientRect();
+      clientX = rect.left + self.padding.leftComputed + posOverride[0];
+    }
+    this.displayPeakInfo(info, clientX);
   }
 }
 
-SpectrumChartD3.prototype.displayPeakInfo = function(info) {
+SpectrumChartD3.prototype.displayPeakInfo = function(info, clientX) {
   var self = this;
 
   function createPeakInfoText(text, label, value) {
@@ -10821,7 +10881,14 @@ SpectrumChartD3.prototype.displayPeakInfo = function(info) {
   }
 
   const areMultipleSpectrumPeaksShown = self.areMultipleSpectrumPeaksShown();
-  let x = d3.event.clientX;
+
+  // Which side of the cursor the box goes on.  d3.event is a TouchEvent on touch (clientX lives
+  // in changedTouches) and null from deferred handlers, so callers may pass clientX instead.
+  let x = clientX;
+  const evt = d3.event;
+  if( (typeof x !== 'number') && evt )
+    x = (typeof evt.clientX === 'number') ? evt.clientX
+        : ((evt.changedTouches && evt.changedTouches.length) ? evt.changedTouches[0].clientX : undefined);
 
   self.hidePeakInfo();
 
