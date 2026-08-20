@@ -3645,13 +3645,9 @@ SpectrumChartD3.prototype.handleVisTouchEnd = function() {
             self.lastKineticTapDomain = domain;
           }//if( self.kineticRefLines )
 
-          // Don't replace a still-pending mousewait: Android fires touchend twice for many taps and the second would cancel-and-replace the first's timer, losing the original tap coordinates.
-          if( !self.mousewait ){
-            self.mousewait = window.setTimeout(
-              self.getMouseUpOrSingleFingerUpHandler([x,y,pageX,pageY,energy,count],false,true),
-              self.options.doubleClickDelay
-            );
-          }
+          // `replacePending` false: Android fires touchend twice for many taps, and replacing a
+          //  still-pending timer would lose the original tap's coordinates.
+          self._scheduleSingleClickEmit( [x,y,pageX,pageY,energy,count], false, true, false );
         }//if( we have last tap event ) / else
 
         /* Set last tap event to current one */
@@ -4471,10 +4467,11 @@ SpectrumChartD3.prototype.setKineticReferenceLines = function( data ) {
 
 
 SpectrumChartD3.prototype.handleUpdateKineticRefLineUpdate = function( posOverride ){
-  // posOverride: callers with no live d3.event (deferred handlers) supply the position.
+  // posOverride: callers with no live d3.event (deferred handlers - notably the touch-tap path)
+  //  supply the position themselves; `mousePosIsValid` only describes a `getMousePos()` result,
+  //  so it must not be consulted when the position came from the caller.
   const m = posOverride ? posOverride : this.getMousePos();
-  // (0,0) is getMousePos()'s failure return, not a legitimate corner tap.
-  const badPos = (!posOverride && (m[0] == 0) && (m[1] == 0));
+  const badPos = (!posOverride && !this.mousePosIsValid);
   if( !this.kineticRefLines || !this.kineticRefLines.ref_lines || !this.kineticRefLines.ref_lines.length || badPos ){
     if( this.currentKineticRefLine ){
       this.currentKineticRefLine = null;
@@ -4949,7 +4946,7 @@ SpectrumChartD3.prototype.addMouseInfoBox = function(){
 SpectrumChartD3.prototype.updateMouseCoordText = function( posOverride ) {
   var self = this;
 
-  if ( (!d3.event && !posOverride) || !self.rawData || !self.rawData.spectra || !self.rawData.spectra.length )
+  if ( (!d3.event && !posOverride) || !self.hasSpectrumData() )
     return;
 
   const p = posOverride ? posOverride : self.getMousePos();
