@@ -6982,6 +6982,8 @@ SpectrumChartD3.prototype.handleMouseMoveScaleFactorSlider = function() {
 
 
 SpectrumChartD3.prototype.offset_integral = function(roi,x0,x1){
+  var self = this;
+  
   if( roi.type === 'NoOffset' || x0===x1 )
     return 0.0;
   
