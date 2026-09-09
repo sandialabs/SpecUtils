@@ -4520,6 +4520,23 @@ SWIGEXPORT int _wrap_SpecFile_load_tka_file(SwigClassWrapper *farg1, SwigArrayWr
 }
 
 
+SWIGEXPORT int _wrap_SpecFile_load_asc_file(SwigClassWrapper *farg1, SwigArrayWrapper *farg2) {
+  int fresult ;
+  SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
+  std::string *arg2 = 0 ;
+  std::string tempstr2 ;
+  bool result;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile *", "SpecFile", "SpecUtils::SpecFile::load_asc_file(std::string const &)", return 0);
+  arg1 = (SpecUtils::SpecFile *)farg1->cptr;
+  tempstr2 = std::string(static_cast<char *>(farg2->data), farg2->size);
+  arg2 = &tempstr2;
+  result = (bool)(arg1)->load_asc_file((std::string const &)*arg2);
+  fresult = (result ? 1 : 0);
+  return fresult;
+}
+
+
 SWIGEXPORT int _wrap_SpecFile_load_multiact_file(SwigClassWrapper *farg1, SwigArrayWrapper *farg2) {
   int fresult ;
   SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
@@ -4920,6 +4937,22 @@ SWIGEXPORT int _wrap_SpecFile_load_from_tka(SwigClassWrapper *farg1, SwigClassWr
   SWIG_check_nonnull(farg2->cptr, "std::istream &", "SWIGTYPE_p_std__istream", "SpecUtils::SpecFile::load_from_tka(std::istream &)", return 0);
   arg2 = (std::istream *)farg2->cptr;
   result = (bool)(arg1)->load_from_tka(*arg2);
+  fresult = (result ? 1 : 0);
+  return fresult;
+}
+
+
+SWIGEXPORT int _wrap_SpecFile_load_from_asc(SwigClassWrapper *farg1, SwigClassWrapper *farg2) {
+  int fresult ;
+  SpecUtils::SpecFile *arg1 = (SpecUtils::SpecFile *) 0 ;
+  std::istream *arg2 = 0 ;
+  bool result;
+  
+  SWIG_check_nonnull(farg1->cptr, "SpecUtils::SpecFile *", "SpecFile", "SpecUtils::SpecFile::load_from_asc(std::istream &)", return 0);
+  arg1 = (SpecUtils::SpecFile *)farg1->cptr;
+  SWIG_check_nonnull(farg2->cptr, "std::istream &", "SWIGTYPE_p_std__istream", "SpecUtils::SpecFile::load_from_asc(std::istream &)", return 0);
+  arg2 = (std::istream *)farg2->cptr;
+  result = (bool)(arg1)->load_from_asc(*arg2);
   fresult = (result ? 1 : 0);
   return fresult;
 }

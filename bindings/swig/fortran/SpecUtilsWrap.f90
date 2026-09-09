@@ -100,6 +100,8 @@ module specutilswrap
   enumerator :: ParserType_ScanDataXml
   enumerator :: ParserType_Json
   enumerator :: ParserType_CaenHexagonGXml
+  enumerator :: ParserType_AspectSpc
+  enumerator :: ParserType_Asc
   enumerator :: ParserType_Auto
  end enum
  integer, parameter, public :: ParserType = kind(ParserType_N42_2006)
@@ -107,7 +109,7 @@ module specutilswrap
     ParserType_SpeIaea, ParserType_TxtOrCsv, ParserType_Cnf, ParserType_TracsMps, ParserType_Aram, ParserType_SPMDailyFile, &
     ParserType_AmptekMca, ParserType_MicroRaider, ParserType_RadiaCode, ParserType_OrtecListMode, ParserType_LsrmSpe, &
     ParserType_Tka, ParserType_MultiAct, ParserType_Phd, ParserType_Lzs, ParserType_ScanDataXml, ParserType_Json, &
-    ParserType_CaenHexagonGXml, ParserType_Auto
+    ParserType_CaenHexagonGXml, ParserType_AspectSpc, ParserType_Asc, ParserType_Auto
  ! enum class SpecUtils::SaveSpectrumAsType
  enum, bind(c)
   enumerator :: SaveSpectrumAsType_Txt
@@ -559,6 +561,7 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure :: load_ortec_listmode_file => swigf_SpecFile_load_ortec_listmode_file
   procedure :: load_lsrm_spe_file => swigf_SpecFile_load_lsrm_spe_file
   procedure :: load_tka_file => swigf_SpecFile_load_tka_file
+  procedure :: load_asc_file => swigf_SpecFile_load_asc_file
   procedure :: load_multiact_file => swigf_SpecFile_load_multiact_file
   procedure :: load_phd_file => swigf_SpecFile_load_phd_file
   procedure :: load_lzs_file => swigf_SpecFile_load_lzs_file
@@ -584,6 +587,7 @@ integer, parameter, public :: SWIGTYPE_SpecUtils__EnergyCalType = C_INT
   procedure :: load_from_ortec_listmode => swigf_SpecFile_load_from_ortec_listmode
   procedure :: load_from_lsrm_spe => swigf_SpecFile_load_from_lsrm_spe
   procedure :: load_from_tka => swigf_SpecFile_load_from_tka
+  procedure :: load_from_asc => swigf_SpecFile_load_from_asc
   procedure :: load_from_multiact => swigf_SpecFile_load_from_multiact
   procedure :: load_from_phd => swigf_SpecFile_load_from_phd
   procedure :: load_from_lzs => swigf_SpecFile_load_from_lzs
@@ -3422,6 +3426,17 @@ type(SwigArrayWrapper) :: farg2
 integer(C_INT) :: fresult
 end function
 
+function swigc_SpecFile_load_asc_file(farg1, farg2) &
+bind(C, name="_wrap_SpecFile_load_asc_file") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigarraywrapper
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigArrayWrapper) :: farg2
+integer(C_INT) :: fresult
+end function
+
 function swigc_SpecFile_load_multiact_file(farg1, farg2) &
 bind(C, name="_wrap_SpecFile_load_multiact_file") &
 result(fresult)
@@ -3675,6 +3690,16 @@ end function
 
 function swigc_SpecFile_load_from_tka(farg1, farg2) &
 bind(C, name="_wrap_SpecFile_load_from_tka") &
+result(fresult)
+use, intrinsic :: ISO_C_BINDING
+import :: swigclasswrapper
+type(SwigClassWrapper), intent(in) :: farg1
+type(SwigClassWrapper), intent(in) :: farg2
+integer(C_INT) :: fresult
+end function
+
+function swigc_SpecFile_load_from_asc(farg1, farg2) &
+bind(C, name="_wrap_SpecFile_load_from_asc") &
 result(fresult)
 use, intrinsic :: ISO_C_BINDING
 import :: swigclasswrapper
@@ -9591,6 +9616,23 @@ fresult = swigc_SpecFile_load_tka_file(farg1, farg2)
 call SWIGTM_fout_bool(fresult, swig_result)
 end function
 
+function swigf_SpecFile_load_asc_file(self, filename) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+logical :: swig_result
+class(SpecFile), intent(in) :: self
+character(len=*), target :: filename
+integer(C_INT) :: fresult 
+type(SwigClassWrapper) :: farg1 
+character(kind=C_CHAR), dimension(:), allocatable, target :: farg2_temp 
+type(SwigArrayWrapper) :: farg2 
+
+farg1 = self%swigdata
+call SWIGTM_fin_char_Sm_(filename, farg2, farg2_temp)
+fresult = swigc_SpecFile_load_asc_file(farg1, farg2)
+call SWIGTM_fout_bool(fresult, swig_result)
+end function
+
 function swigf_SpecFile_load_multiact_file(self, filename) &
 result(swig_result)
 use, intrinsic :: ISO_C_BINDING
@@ -10002,6 +10044,22 @@ type(SwigClassWrapper) :: farg2
 farg1 = self%swigdata
 farg2 = input%swigdata
 fresult = swigc_SpecFile_load_from_tka(farg1, farg2)
+call SWIGTM_fout_bool(fresult, swig_result)
+end function
+
+function swigf_SpecFile_load_from_asc(self, input) &
+result(swig_result)
+use, intrinsic :: ISO_C_BINDING
+logical :: swig_result
+class(SpecFile), intent(in) :: self
+class(SWIGTYPE_p_std__istream), intent(in) :: input
+integer(C_INT) :: fresult 
+type(SwigClassWrapper) :: farg1 
+type(SwigClassWrapper) :: farg2 
+
+farg1 = self%swigdata
+farg2 = input%swigdata
+fresult = swigc_SpecFile_load_from_asc(farg1, farg2)
 call SWIGTM_fout_bool(fresult, swig_result)
 end function
 

@@ -8,7 +8,7 @@ if(${CMAKE_VERSION} VERSION_LESS 3.12)
   cmake_policy(VERSION ${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION})
 endif()
 
-project( SpecUtils VERSION 2026.3.0 )
+project( SpecUtils VERSION 2026.4.0 )
 enable_testing()  # Enable here to allow running `ctest` from top-most build dir
 
 # Add this line to specify the architectures for MacOS
@@ -134,6 +134,7 @@ set( sources
      src/SpecFile_lzs.cpp
      src/SpecFile_phd.cpp
      src/SpecFile_tka.cpp
+     src/SpecFile_asc.cpp
      src/SpecFile_lsrm.cpp
      src/SpecFile_mca.cpp
      src/SpecFile_spmdf.cpp
