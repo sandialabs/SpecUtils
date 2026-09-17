@@ -221,7 +221,14 @@ int run_file_parse_fuzz( const uint8_t *data, size_t size )
     if( spec.load_from_multiact( strm ) )
       test_write_output( spec );
   }
-  
+
+  {
+    SpecUtils::SpecFile spec;
+    stringstream strm( datastr, ios_base::in );
+    if( spec.load_from_mpa( strm ) )
+      test_write_output( spec );
+  }
+
   {
     SpecUtils::SpecFile spec;
     stringstream strm( datastr, ios_base::in );

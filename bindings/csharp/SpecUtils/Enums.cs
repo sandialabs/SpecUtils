@@ -36,7 +36,9 @@ public enum ParserType
     /// <summary>Requires SpecUtils_ENABLE_URI_SPECTRA compile flag.</summary>
     Uri = 26,
 
-    Auto = 27
+    Mpa = 27,
+
+    Auto = 28
 }
 
 /// <summary>

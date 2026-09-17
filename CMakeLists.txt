@@ -123,6 +123,7 @@ set( sources
      src/SpecFile_spmdf.cpp
      src/SpecFile_mps.cpp
      src/SpecFile_multiact.cpp
+     src/SpecFile_mpa.cpp
      src/SpecFile_uraider.cpp
      src/SpecFile_radiacode.cpp
      src/SpecFile_xml_other.cpp
