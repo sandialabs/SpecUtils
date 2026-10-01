@@ -1658,10 +1658,14 @@ std::vector<UrlSpectrum> spectrum_decode_first_url( const std::string &url,
                                                     const size_t recursion_depth = 0 )
 {
   // Guard against unbounded recursion (and hence stack exhaustion) from a crafted URI that
-  //  contains more `:0A:`-delimited spectra than declared.  `m_num_spectra` is itself capped at
-  //  16 in `get_spectrum_url_info`, so this bounds the recursion to a small, safe depth.
-  if( recursion_depth >= info.m_num_spectra )
-    throw runtime_error( "spectrum_decode_first_url: more embedded spectra than declared." );
+  //  contains many `:0A:`-delimited spectra.  We intentionally bound recursion by a fixed cap
+  //  rather than by the declared `info.m_num_spectra`: some older encoders under-declared the
+  //  spectrum count (e.g., wrote 0, decoding to 1, while embedding two spectra), and such URIs
+  //  used to decode fine.  `get_spectrum_url_info` already caps the number of URLs/spectra at 16,
+  //  so this fixed bound keeps the recursion to a small, safe depth while staying tolerant.
+  const size_t max_embedded_spectra = 8;
+  if( recursion_depth >= max_embedded_spectra )
+    throw runtime_error( "spectrum_decode_first_url: more embedded spectra than allowed." );
 
   size_t pos = url.find( " S:" );
   
