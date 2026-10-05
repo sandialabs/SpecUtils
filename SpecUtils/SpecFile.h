@@ -191,7 +191,9 @@ enum class ParserType : int
   /** The URI defined format; e.g., from a QR-code */
   Uri,
 #endif
-  
+  /** FastComTec MPANT ASCII (.mpa) format. */
+  Mpa,
+
   /** Automatically determine format - should be safe to be used with any format
    that can be parsed.  Will first guess format based on file extension, then
    on initial file contents, and if still not successfully identified, will try
@@ -1794,6 +1796,8 @@ public:
   /** Load a GADRAS-lineage ASCII (.asc/.ASC) file. */
   bool load_asc_file( const std::string &filename );
   bool load_multiact_file( const std::string &filename );
+  /** Load a FastComTec MPANT ASCII (.mpa) file. */
+  bool load_mpa_file( const std::string &filename );
   bool load_phd_file( const std::string &filename );
   bool load_lzs_file( const std::string &filename );
   bool load_radiacode_file( const std::string &filename );
@@ -1917,7 +1921,13 @@ public:
    channel counts)
    */
   bool load_from_multiact( std::istream &input );
-  
+
+  /** Load FastComTec MPANT ASCII (.mpa) file.
+   Handles up to four simultaneous ADC (detector) spectra, honoring each ADC's
+   own energy calibration and the caluse flag.
+   */
+  bool load_from_mpa( std::istream &input );
+
   /** Load from PHD file.
    As of 20191005 only tested on a limited number of files.
    */

@@ -37,6 +37,7 @@ public enum ParserType {
     AspectSpc,
     Asc,
     Uri,
+    Mpa,
     Auto;
 
     public static ParserType fromOrdinal(int ordinal) {

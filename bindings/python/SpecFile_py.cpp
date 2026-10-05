@@ -471,6 +471,7 @@ private:
         case SpecUtils::ParserType::CaenHexagonGXml: type = "GXml"; break;
         case SpecUtils::ParserType::AspectSpc: type = "Aspect SPC"; break;
         case SpecUtils::ParserType::Asc: type = "ASC"; break;
+        case SpecUtils::ParserType::Mpa: type = "MPA"; break;
         case SpecUtils::ParserType::Auto: type = ""; break;
       }//switch( parser_type )
       
@@ -1790,6 +1791,7 @@ NB_MODULE(SpecUtils, m) {
   #if( SpecUtils_ENABLE_URI_SPECTRA )
   .value("Uri", SpecUtils::ParserType::Uri)
 #endif
+  .value("Mpa", SpecUtils::ParserType::Mpa)
   .value("Auto", SpecUtils::ParserType::Auto);
 
 

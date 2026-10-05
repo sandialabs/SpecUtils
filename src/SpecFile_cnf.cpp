@@ -312,7 +312,7 @@ bool SpecFile::load_from_cnf( std::istream &input )
     input.seekg( 0, ios::beg );
     
     const size_t size = static_cast<size_t>( 0 + eof_pos - orig_pos );
-    if( size > 8*1024*1024 )
+    if( size > 64*1024*1024 )
       throw runtime_error( "File too large to be a CNF file" );
 
     std::vector<byte_type> file_bits(size);

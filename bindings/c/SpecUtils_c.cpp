@@ -95,6 +95,8 @@ static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_Asc) == s
 static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_Uri) == static_cast<int>(SpecUtils::ParserType::Uri),
               "SpecUtils_ParserType needs updating" );
 #endif
+static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_Mpa) == static_cast<int>(SpecUtils::ParserType::Mpa),
+              "SpecUtils_ParserType needs updating" );
 static_assert( static_cast<int>(SpecUtils_ParserType::SpecUtils_Parser_Auto) == static_cast<int>(SpecUtils::ParserType::Auto),
               "SpecUtils_ParserType needs updating" );
 

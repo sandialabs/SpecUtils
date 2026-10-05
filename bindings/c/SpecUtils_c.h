@@ -110,6 +110,7 @@ enum SpecUtils_ParserType
   #if( SpecUtils_ENABLE_URI_SPECTRA )
   SpecUtils_Parser_Uri,
   #endif
+  SpecUtils_Parser_Mpa,
   SpecUtils_Parser_Auto
 };//enum SpecUtils_ParserType
   

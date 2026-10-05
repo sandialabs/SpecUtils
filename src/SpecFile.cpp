@@ -4574,6 +4574,10 @@ bool SpecFile::load_file( const std::string &filename,
       success = load_aspect_spc_file( filename );
     break;
 
+    case ParserType::Mpa:
+      success = load_mpa_file( filename );
+    break;
+
     case ParserType::Auto:
     {
       bool triedPcf = false, triedSpc = false, triedAspectSpc = false,
@@ -4584,7 +4588,7 @@ bool SpecFile::load_file( const std::string &filename,
           triedTka = false, triedMultiAct = false, triedPhd = false,
           triedLzs = false, triedXmlScanData = false, triedJson = false,
           tried_gxml = false, triedRadiaCode = false, tried_uri = false,
-          triedSpectraLine = false, triedAsc = false;
+          triedSpectraLine = false, triedAsc = false, triedMpa = false;
       
       if( orig_file_ending.empty() )
         orig_file_ending = filename;
@@ -4775,6 +4779,13 @@ bool SpecFile::load_file( const std::string &filename,
           if( success ) break;
         }//if( orig_file_ending=="gxml" )
 
+        if( orig_file_ending == "mpa" )
+        {
+          triedMpa = true;
+          success = load_mpa_file( filename );
+          if( success ) break;
+        }//if( orig_file_ending=="mpa" )
+
         
 #if( SpecUtils_ENABLE_URI_SPECTRA )
         if( istarts_with(filename, "raddata://") || (orig_file_ending == "uri") )
@@ -4865,7 +4876,12 @@ bool SpecFile::load_file( const std::string &filename,
       
       if( !success && !triedRadiaCode )
         success = load_radiacode_file( filename );
-      
+
+      // MPA files are quite rare, so try this format last to avoid mis-reading
+      //  another format as MPA.
+      if( !success && !triedMpa )
+        success = load_mpa_file( filename );
+
        break;
     }//case Auto
   };//switch( parser_type )
