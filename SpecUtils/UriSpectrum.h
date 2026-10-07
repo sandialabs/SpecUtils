@@ -333,6 +333,14 @@ namespace SpecUtils
   /** Performs DEFLATE (aka, zip) de-compression */
   void deflate_decompress( void *in_data, size_t in_data_size, std::vector<uint8_t> &out_data );
 
+  /** De-compresses raw DEFLATE data - i.e., without the zlib header and trailer that
+   `deflate_decompress` expects - as found in ZIP archive members.
+
+   Throws on invalid data, or if the de-compressed size would exceed `max_out_size` bytes.
+   */
+  void raw_deflate_decompress( const void *in_data, size_t in_data_size,
+                               std::vector<uint8_t> &out_data, const size_t max_out_size );
+
   
   /** Performs the same encoding as `streamvbyte_encode` from https://github.com/lemire/streamvbyte,
    but pre-pended with a uint16_t to give number of integer entries, has a c++ interface, and is way,

@@ -386,27 +386,33 @@ void deflate_compress_internal( const void *in_data, size_t in_data_size, T &out
 
 
 
+/** De-compresses zlib-wrapped DEFLATE data, or if `raw` is true, bare DEFLATE data (as in ZIP files).
+ Throws if the output would exceed `max_out_size` bytes.
+ */
 template<class T>
-void deflate_decompress_internal( void *in_data, size_t in_data_size, T &out_data )
+void deflate_decompress_internal( const void *in_data, size_t in_data_size, T &out_data,
+                                  const bool raw = false,
+                                  const size_t max_out_size = 256u * 1024u * 1024u )
 {
   static_assert( sizeof(typename T::value_type) == 1, "Must be byte-based container" );
   
   z_stream zs;
   memset(&zs, 0, sizeof(zs));
   
-  if( inflateInit(&zs) != Z_OK )
+  // A negative window size tells zlib there is no zlib header or trailer
+  if( inflateInit2( &zs, (raw ? -MAX_WBITS : MAX_WBITS) ) != Z_OK )
     throw(std::runtime_error("deflate_decompress: error from inflateInit while de-compressing."));
   
-  zs.next_in = (Bytef*)in_data;
   if( in_data_size > static_cast<size_t>(std::numeric_limits<unsigned int>::max()) )
+  {
+    inflateEnd( &zs );
     throw std::runtime_error( "deflate_decompress: input data size exceeds unsigned int max" );
+  }
+  zs.next_in = (Bytef*)in_data;
   zs.avail_in = static_cast<unsigned int>( in_data_size );
   
   int ret = Z_OK;
   typename T::value_type buffer[1024*16];
-
-  // Cap max output to prevent zip-bomb DoS (e.g., 256 MB)
-  const size_t max_out_size = 256u * 1024u * 1024u;
 
   T result;
 
@@ -2541,6 +2547,13 @@ void deflate_decompress( void *in_data, size_t in_data_size, std::string &out_da
 void deflate_decompress( void *in_data, size_t in_data_size, std::vector<uint8_t> &out_data )
 {
   deflate_decompress_internal( in_data, in_data_size, out_data );
+}
+
+
+void raw_deflate_decompress( const void *in_data, size_t in_data_size,
+                             std::vector<uint8_t> &out_data, const size_t max_out_size )
+{
+  deflate_decompress_internal( in_data, in_data_size, out_data, true, max_out_size );
 }
 
 

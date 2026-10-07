@@ -46,6 +46,11 @@
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/Filesystem.h"
 
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+#include <zlib.h>
+#include "SpecUtils/UriSpectrum.h"
+#endif
+
 using namespace std;
 using namespace SpecUtils;
 
@@ -749,3 +754,211 @@ TEST_CASE( "CAM energy calibration is clamped to the four ENGCAL coefficients" )
   reader.ReadFile( excessive );
   CHECK( reader.GetEnergyCalibration().size() == 4 );  //literal: this is the format's contract
 }
+
+
+TEST_CASE( "CAM spectrum round-trips any number of channels" )
+{
+  // The SPEC block header declares channels rounded up to a power of two (at least 512), but
+  //  only the actual channels used to be written, so reading overran the data; and the BITES
+  //  byte was written as a word, clobbering the low byte of the ACQP channel count.
+  for( const size_t nchannel : {size_t(1), size_t(100), size_t(256), size_t(300), size_t(511),
+                                size_t(512), size_t(600), size_t(1000), size_t(5000), size_t(16384), size_t(40000), size_t(65535)} )
+  {
+    CAPTURE( nchannel );
+
+    vector<uint32_t> counts( nchannel );
+    for( size_t i = 0; i < nchannel; ++i )
+      counts[i] = static_cast<uint32_t>( i + 1 );
+
+    CAMInputOutput::CAMIO writer;
+    writer.AddEnergyCalibration( {0.0f, 3.0f} );
+    writer.AddSpectrum( counts );
+    const vector<byte_type> data = writer.CreateCAMFile();
+
+    CAMInputOutput::CAMIO reader;
+    reader.ReadFile( data );
+    CHECK( reader.GetNumChannelsFromAcqp() == nchannel );
+    REQUIRE_NOTHROW( reader.GetSpectrum() );
+    CHECK( reader.GetSpectrum() == counts );
+  }
+
+  // The SPEC header stores the channel count as a uint16
+  CAMInputOutput::CAMIO writer;
+  CHECK_THROWS( writer.AddSpectrum( vector<uint32_t>( 65536, 1 ) ) );
+
+  // Files SpecUtils wrote before 20261005 have the low byte of the ACQP channel count zeroed;
+  //  emulate one, and make sure the (non-zero) channels past that count arent trimmed off.
+  CAMInputOutput::CAMIO old_writer;
+  old_writer.AddSpectrum( vector<uint32_t>( 1000, 7 ) );
+  vector<byte_type> old_file = old_writer.CreateCAMFile();
+  for( size_t i = 0; i < 28; ++i )
+  {
+    uint32_t block_id = 0, block_pos = 0;
+    memcpy( &block_id, old_file.data() + 0x70 + i*0x30, sizeof(block_id) );
+    if( block_id != static_cast<uint32_t>(CAMInputOutput::CAMIO::CAMBlock::ACQP) )
+      continue;
+    memcpy( &block_pos, old_file.data() + 0x70 + i*0x30 + 0x0a, sizeof(block_pos) );
+    uint16_t head_size = 0;
+    memcpy( &head_size, old_file.data() + block_pos + 0x10, sizeof(head_size) );
+    old_file[block_pos + head_size + 0x89] = 0;  // 1000 -> 768
+    break;
+  }
+  CAMInputOutput::CAMIO old_reader;
+  old_reader.ReadFile( old_file );
+  REQUIRE( old_reader.GetNumChannelsFromAcqp() == 768 );
+  const vector<uint32_t> &old_spectrum = old_reader.GetSpectrum();
+  CHECK( old_spectrum.size() == 1024 );  //Not trimmed to 768, so we get the padding too
+  CHECK( vector<uint32_t>( begin(old_spectrum), begin(old_spectrum) + 1000 ) == vector<uint32_t>( 1000, 7 ) );
+}//TEST_CASE( "CAM spectrum round-trips any number of channels" )
+
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+// Returns a minimal CNF holding `counts`, with `embedded_cnf` (if non-empty) ZIP-ed into an
+//  EMBEDDED_FILE block, laid out like a Genie-written one.  If `corrupt_crc`, the CRC won't match.
+static vector<byte_type> make_cnf_with_embedded( const vector<uint32_t> &counts,
+                                                 const string &title,
+                                                 const vector<byte_type> &embedded_cnf,
+                                                 const bool corrupt_crc = false )
+{
+  CAMInputOutput::CAMIO writer;
+  writer.AddEnergyCalibration( {0.0f, 3.0f} );
+  writer.AddSampleTitle( title );
+  writer.AddRealTime( 100.0f );
+  writer.AddLiveTime( 99.0f );
+  writer.AddSpectrum( counts );
+  vector<byte_type> data = writer.CreateCAMFile();
+
+  if( embedded_cnf.empty() )
+    return data;
+
+  // zlib-wrapped DEFLATE is raw DEFLATE with a 2 byte header and a 4 byte trailer
+  vector<uint8_t> deflated;
+  deflate_compress( embedded_cnf.data(), embedded_cnf.size(), deflated );
+  REQUIRE( deflated.size() > 6 );
+  const vector<uint8_t> raw( begin(deflated) + 2, end(deflated) - 4 );
+
+  uint32_t crc = static_cast<uint32_t>( crc32( crc32(0L, Z_NULL, 0), embedded_cnf.data(),
+                                               static_cast<uInt>(embedded_cnf.size()) ) );
+  if( corrupt_crc )
+    crc ^= 0x1;
+
+  const auto put16 = []( vector<byte_type> &v, const uint16_t val ) {
+    v.push_back( val & 0xFF ); v.push_back( (val >> 8) & 0xFF );
+  };
+  const auto put32 = [&put16]( vector<byte_type> &v, const uint32_t val ) {
+    put16( v, val & 0xFFFF ); put16( v, (val >> 16) & 0xFFFF );
+  };
+
+  const string member_name = "bkg.CNF";
+  vector<byte_type> zip;
+  put32( zip, 0x04034b50 );                                 // local file header signature
+  put16( zip, 20 );                                         // version needed
+  put16( zip, 0 );                                          // flags
+  put16( zip, 8 );                                          // method: DEFLATE
+  put32( zip, 0 );                                          // mod time and date
+  put32( zip, crc );
+  put32( zip, static_cast<uint32_t>(raw.size()) );
+  put32( zip, static_cast<uint32_t>(embedded_cnf.size()) );
+  put16( zip, static_cast<uint16_t>(member_name.size()) );
+  put16( zip, 0 );                                          // extra field length
+  zip.insert( end(zip), begin(member_name), end(member_name) );
+  zip.insert( end(zip), begin(raw), end(raw) );
+  // (Genie writes a central directory here too, but the reader doesnt need it)
+
+  const uint32_t header_size = 0x110;
+  const string path = "C:\\GENIE2K\\CAMFILES\\" + member_name;
+  vector<byte_type> block;
+  put32( block, header_size );
+  put32( block, static_cast<uint32_t>(header_size + zip.size()) );
+  put32( block, static_cast<uint32_t>(CAMInputOutput::CAMIO::CAMBlock::EMBEDDED_FILE) );
+  block.insert( end(block), begin(path), end(path) );
+  block.resize( header_size, 0 );
+  block.insert( end(block), begin(zip), end(zip) );
+
+  // Genie puts blocks on 512 byte boundaries
+  const uint32_t block_pos = static_cast<uint32_t>( 512 * ((data.size() + 511) / 512) );
+  data.resize( block_pos, 0 );
+  data.insert( end(data), begin(block), end(block) );
+
+  // Register it in the first empty slot of the file header's block directory
+  for( size_t i = 0; i < 28; ++i )
+  {
+    const size_t entry = 0x70 + i*0x30;
+    uint32_t block_id = 0;
+    memcpy( &block_id, data.data() + entry, sizeof(block_id) );
+    if( block_id != 0 )
+      continue;
+
+    const uint32_t embedded_id = static_cast<uint32_t>(CAMInputOutput::CAMIO::CAMBlock::EMBEDDED_FILE);
+    memcpy( data.data() + entry, &embedded_id, sizeof(embedded_id) );
+    memcpy( data.data() + entry + 0x0a, &block_pos, sizeof(block_pos) );
+    return data;
+  }
+
+  REQUIRE_MESSAGE( false, "No free CAM header slot" );
+  return data;
+}//make_cnf_with_embedded(...)
+
+
+TEST_CASE( "CNF embedded background files" )
+{
+  const auto load = []( const vector<byte_type> &data, SpecFile &spec ) -> bool {
+    const string str( begin(data), end(data) );
+    std::istringstream strm( str );
+    return spec.load_from_cnf( strm );
+  };
+
+  const vector<uint32_t> oldest_counts( 256, 1 ), middle_counts( 300, 2 ), outer_counts( 1024, 3 );
+  const vector<byte_type> oldest = make_cnf_with_embedded( oldest_counts, "Oldest", {} );
+  const vector<byte_type> middle = make_cnf_with_embedded( middle_counts, "Middle", oldest );
+
+  SUBCASE( "Chain of embedded files is read" )
+  {
+    SpecFile spec;
+    REQUIRE( load( make_cnf_with_embedded( outer_counts, "Outer", middle ), spec ) );
+    REQUIRE( spec.num_measurements() == 3 );
+    CHECK( spec.parse_warnings().empty() );
+
+    const auto &meas = spec.measurements();
+    CHECK( meas[0]->title() == "Outer" );
+    CHECK( meas[0]->source_type() != SourceType::Background );
+    CHECK( meas[0]->num_gamma_channels() == outer_counts.size() );
+
+    CHECK( meas[1]->title() == "Middle" );
+    CHECK( meas[1]->source_type() == SourceType::Background );
+    CHECK( meas[1]->num_gamma_channels() == middle_counts.size() );
+    CHECK( meas[1]->gamma_count_sum() == doctest::Approx( 2.0*middle_counts.size() ) );
+
+    CHECK( meas[2]->title() == "Oldest" );
+    CHECK( meas[2]->source_type() == SourceType::Background );
+    CHECK( meas[2]->num_gamma_channels() == oldest_counts.size() );
+
+    const set<int> samples( begin(spec.sample_numbers()), end(spec.sample_numbers()) );
+    CHECK( samples == set<int>{1, 2, 3} );
+  }
+
+  SUBCASE( "Corrupt embedded file keeps the files already read" )
+  {
+    const vector<byte_type> bad_middle = make_cnf_with_embedded( middle_counts, "Middle", oldest, true );
+    SpecFile spec;
+    REQUIRE( load( make_cnf_with_embedded( outer_counts, "Outer", bad_middle ), spec ) );
+    REQUIRE( spec.num_measurements() == 2 );
+    CHECK( spec.measurements()[1]->title() == "Middle" );
+    REQUIRE( spec.parse_warnings().size() == 1 );
+    CHECK( spec.parse_warnings()[0].find( "CRC" ) != string::npos );
+  }
+
+  SUBCASE( "Deep nesting is capped" )
+  {
+    // Builds the chain 100 deep; the reader must stop at its limit, not overflow the stack
+    vector<byte_type> chain = oldest;
+    for( size_t i = 0; i < 100; ++i )
+      chain = make_cnf_with_embedded( vector<uint32_t>( 64, 1 ), "Level", chain );
+
+    SpecFile spec;
+    REQUIRE( load( chain, spec ) );
+    CHECK( spec.num_measurements() == 65 );  // the outer file, plus the 64 max embedded files
+    REQUIRE( spec.parse_warnings().size() == 1 );
+    CHECK( spec.parse_warnings()[0].find( "nested" ) != string::npos );
+  }
+}//TEST_CASE( "CNF embedded background files" )
+#endif //SpecUtils_ENABLE_URI_SPECTRA

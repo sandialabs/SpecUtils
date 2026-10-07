@@ -224,6 +224,31 @@ struct KEdgeInfo
     KEdgeInfo() = default;
 };
 
+/** A spectrum file Genie embedded in a CNF; see `CAMIO::CAMBlock::EMBEDDED_FILE`.
+
+ The file is held as the raw (still-compressed) contents of the ZIP member, so CAMIO does not
+ need zlib; inflate `compressedData` with a raw-DEFLATE (no zlib header) decompressor.
+ */
+struct EmbeddedFile
+{
+    /** Path of the file on the computer Genie ran on - e.g. "C:\GENIE2K\CAMFILES\bkg.CNF". */
+    std::string originalPath;
+
+    /** Filename of the ZIP member (normally the filename part of `originalPath`). */
+    std::string memberName;
+
+    /** ZIP compression method: 0 is stored (uncompressed), and 8 is raw DEFLATE. */
+    uint16_t compressionMethod = 0;
+
+    /** CRC-32 of the uncompressed file.  (Not named `crc32`, which zlib may define as a macro.) */
+    uint32_t crc = 0;
+
+    /** Size the file should be, once decompressed. */
+    uint32_t uncompressedSize = 0;
+
+    std::vector<byte_type> compressedData;
+};
+
 // Main CAMIO class
 class CAMIO {
 public:
@@ -266,7 +291,23 @@ public:
          */
         ANALYSIS_SEQUENCE = 0x00012010,
 
-        K_EDGE_CONFIG = 0x00012024  // K-edge configuration block
+        K_EDGE_CONFIG = 0x00012024,  // K-edge configuration block
+
+        /** A whole spectrum file, ZIP compressed - seen holding the background spectrum Genie
+         subtracted (the analysis sequence runs ARBACK, and the report has a "BackgrSub" section).
+
+         Unlike the `0x00012xxx` blocks, this has no standard CAM block header; it is laid out as
+           0x00  uint32  size of this header (0x110)
+           0x04  uint32  size of the header plus the ZIP archive that follows it
+           0x08  uint32  this block's ID
+           0x0C  char[]  path of the file on the analyst's computer, null-padded to 0x110
+           0x110 a complete single-member ZIP archive (local header, data, central directory).
+
+         Because the embedded file is itself a CNF, it can embed its own background; a lab that
+         uses each background to background-subtract the next produces a chain - one seen file
+         held 13 generations, going back nine years.
+         */
+        EMBEDDED_FILE = 0x00004006
     };
 
     enum class RecordSize : uint16_t {
@@ -654,6 +695,12 @@ public:
      */
     uint32_t GetNumChannelsFromAcqp();
 
+    /** Returns true if the ACQP section says the spectrum has a single row and group (as normal
+     spectra do); `GetNumChannelsFromAcqp()` is the count per row and group.
+     Returns false if there is no ACQP block, or it is truncated.
+     */
+    bool IsSingleRowAndGroup();
+
     /** Reads additional string fields from the SAMP block.
      These fields are at fixed offsets in the SAMP data area.
      Strings that are empty or all-null in the file will be returned as empty strings.
@@ -698,6 +745,17 @@ public:
      */
     bool GetGPSData( double &latitude, double &longitude,
                      double &speed, SpecUtils::time_point_t &position_time );
+
+    /** Returns the file embedded in the `EMBEDDED_FILE` block, if there is one.
+
+     Only locates the compressed data and checks it is within the file; does not decompress it.
+
+     @param[out] file  The embedded file; only valid if true is returned.
+     @return true if the CNF has an `EMBEDDED_FILE` block.
+
+     Throws if the block exists but is malformed.
+     */
+    bool GetEmbeddedFile( EmbeddedFile &file );
 
     // add data to CAMIO object for later file writing
     void AddNuclide(const std::string& name, const float halfLife, 

@@ -1983,6 +1983,15 @@ public:
    Throws exception on error.
    */
   virtual void load_cnf_using_reader( CAMInputOutput::CAMIO &reader );
+
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+  /** Adds the spectrum files Genie embedded in the CNF (see `CAMIO::CAMBlock::EMBEDDED_FILE`) as
+   additional background Measurements, following the chain of embedded files down to the oldest.
+
+   Does not throw; on failure adds a parse warning, keeping any files that were read.
+   */
+  void load_cnf_embedded_files( CAMInputOutput::CAMIO &reader );
+#endif
   
   bool load_from_tracs_mps( std::istream &input );
   

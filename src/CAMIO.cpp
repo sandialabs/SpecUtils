@@ -750,6 +750,7 @@ void CAMIO::ReadBlock(CAMBlock block) {
           case CAMBlock::DISP:
           case CAMBlock::SPEC:
           case CAMBlock::K_EDGE_CONFIG:
+          case CAMBlock::EMBEDDED_FILE:
             // Add other block types as needed
             break;
         }
@@ -758,7 +759,7 @@ void CAMIO::ReadBlock(CAMBlock block) {
 
 // Helper function to read a uint16_t from the data buffer
 static uint16_t ReadUInt16(const std::vector<byte_type>& data, size_t offset) {
-    if( (offset + sizeof(uint16_t)) > data.size() )
+    if( (offset > data.size()) || (sizeof(uint16_t) > (data.size() - offset)) )
       throw std::out_of_range( "ReadUInt16: offset " + std::to_string(offset) + " out of range (data size: " + std::to_string(data.size()) + ")" );
 
     uint16_t value;
@@ -768,7 +769,7 @@ static uint16_t ReadUInt16(const std::vector<byte_type>& data, size_t offset) {
 
 // Helper function to read a uint32_t from the data buffer
 static uint32_t ReadUInt32(const std::vector<byte_type>& data, size_t offset) {
-    if( offset + sizeof(uint32_t) > data.size() )
+    if( (offset > data.size()) || (sizeof(uint32_t) > (data.size() - offset)) )
       throw std::out_of_range( "ReadUInt32: offset " + std::to_string(offset) + " out of range (data size: " + std::to_string(data.size()) + ")" );
 
     uint32_t value;
@@ -1335,6 +1336,17 @@ std::vector<uint32_t>& CAMIO::GetSpectrum() {
             fileSpectrum[i] = value;
         }
     }
+
+    // The SPEC header gives the channels allocated, which writers round up to a power of two (of
+    //  at least 512); the ACQP section has the number actually used, so trim off the padding.
+    //  The ACQP count is per row and group though, so only trim when there is one of each.
+    //  We also require the trimmed channels be empty, so a stale count, or the clobbered count
+    //  of files SpecUtils wrote before 20261005, cant drop real data.
+    const uint32_t acqp_channels = GetNumChannelsFromAcqp();
+    if( (acqp_channels > 0) && (acqp_channels < fileSpectrum.size()) && IsSingleRowAndGroup()
+       && std::all_of( begin(fileSpectrum) + acqp_channels, end(fileSpectrum),
+                       []( const uint32_t c ){ return c == 0; } ) )
+      fileSpectrum.resize( acqp_channels );
 
     return fileSpectrum;
 }
@@ -2601,6 +2613,9 @@ void CAMIO::AddGPSData(const double latitude, const double longitude, const floa
 void CAMIO::AddSpectrum(const std::vector<uint32_t>& channel_counts)
 {
     //size_t data_loc = 0x30;
+    // The SPEC block header holds the channel count as a uint16
+    if( channel_counts.size() > 0xFFFF )
+      throw std::runtime_error( "CAMIO::AddSpectrum: CNF files can have at most 65535 channels" );
     num_channels = channel_counts.size();
     specData.resize(num_channels * sizeof(uint32_t));
     // put the spectral data in
@@ -2618,6 +2633,9 @@ void CAMIO::AddSpectrum(const std::vector<uint32_t>& channel_counts)
 void CAMIO::AddSpectrum(const std::vector<float>& channel_counts)
 {   
     //size_t data_loc = 0x30;
+    // The SPEC block header holds the channel count as a uint16
+    if( channel_counts.size() > 0xFFFF )
+      throw std::runtime_error( "CAMIO::AddSpectrum: CNF files can have at most 65535 channels" );
     num_channels = channel_counts.size();
     specData.resize(num_channels * sizeof(uint32_t));
     // put the spectral data in
@@ -2855,7 +2873,9 @@ std::vector<byte_type> CAMIO::GenerateBlock(CAMBlock block, size_t loc,
         auto acqpHead = GenerateBlockHeader(block, loc);
 
         enter_CAM_value("PHA ", acqpCommon, 0x80, cam_type::cam_string);
-        enter_CAM_value(0x04, acqpCommon, 0x88, cam_type::cam_word); //BITES
+        // BITES is a single byte - writing it as a word clobbered the low byte of the uint32
+        //  channel count that follows at 0x89, so non-multiples of 256 channels read back wrong.
+        enter_CAM_value(0x04, acqpCommon, 0x88, cam_type::cam_byte); //BITES
         enter_CAM_value(0x01, acqpCommon, 0x8D, cam_type::cam_word); //ROWS
         enter_CAM_value(0x01, acqpCommon, 0x91, cam_type::cam_word); //GROUPS
         enter_CAM_value(0x04, acqpCommon, 0x55, cam_type::cam_word); //BACKGNDCHNS
@@ -2882,6 +2902,15 @@ std::vector<byte_type> CAMIO::GenerateBlock(CAMBlock block, size_t loc,
         dataHead.insert(dataHead.end(), offset, 0);
         //TODO padd with zeros from 0x28 of the header
         dataHead.insert(dataHead.end(), specData.begin(), specData.end());
+
+        // The header declares the channel count rounded up to a power of two (see
+        //  `GenerateBlockHeader`), and readers expect that many channels, so zero-pad to it.
+        const size_t declared_channels = ReadUInt16(dataHead, 0x2A);
+        const size_t declared_size = ReadUInt16(dataHead, 0x10) + offset
+                                     + declared_channels * sizeof(uint32_t);
+        if( dataHead.size() < declared_size )
+          dataHead.resize( declared_size, 0 );
+
         return dataHead;
     }
 
@@ -3003,6 +3032,7 @@ std::vector<byte_type> CAMIO::GenerateBlockHeader(CAMBlock block, size_t loc, ui
       case CAMBlock::ENERGY_CAL_METHOD2:
       case CAMBlock::ANALYSIS_SEQUENCE:
       case CAMBlock::K_EDGE_CONFIG:
+      case CAMBlock::EMBEDDED_FILE:
         // No action - we dont generate these blocks (other than ACQP), so they just get the
         //  ACQP defaults above.  Note there is intentionally no `default:` case, so that adding
         //  a new CAMBlock gives a compiler warning here.
@@ -3480,12 +3510,17 @@ uint32_t CAMIO::GetNumChannelsFromAcqp()
   for( auto it = range.first; it != range.second; ++it )
   {
     const size_t pos = it->second;
+    if( (pos + 0x12) > readData->size() )
+      continue;
+
     const uint16_t headSize = ReadUInt16( *readData, pos + 0x10 );
     const size_t dataStart = pos + static_cast<size_t>(headSize);
 
-    // Channel count is stored as a uint32 (cam_longword) at acqpCommon offset 0x89.
-    // The Python CNFreader reads the byte at 0x8A (which is the second byte of this uint32)
-    // and multiplies by 256, which is equivalent for channel counts that are multiples of 256.
+    // Channel count is stored as a uint32 (cam_longword) at acqpCommon offset 0x89, per row and
+    //  group.  The Python CNFreader reads the byte at 0x8A (which is the second byte of this
+    //  uint32) and multiplies by 256, which is equivalent for channel counts that are multiples
+    //  of 256.  Note: files SpecUtils wrote before 20261005 have the low byte of this count
+    //  clobbered by the BITES field, so it reads rounded down to a multiple of 256.
     if( (dataStart + 0x89 + 4) > readData->size() )
       continue;
 
@@ -3497,6 +3532,33 @@ uint32_t CAMIO::GetNumChannelsFromAcqp()
   }
 
   return 0;
+}
+
+
+bool CAMIO::IsSingleRowAndGroup()
+{
+  // Uses the first readable ACQP block, as `GetNumChannelsFromAcqp()` does
+  const auto range = blockAddresses.equal_range( CAMBlock::ACQP );
+  for( auto it = range.first; it != range.second; ++it )
+  {
+    const size_t pos = it->second;
+    if( (pos + 0x12) > readData->size() )
+      continue;
+
+    const uint16_t headSize = ReadUInt16( *readData, pos + 0x10 );
+    const size_t dataStart = pos + static_cast<size_t>(headSize);
+    if( (dataStart + 0x91 + 2) > readData->size() )
+      continue;
+
+    // ROWS (cam_word at 0x8D) and GROUPS (cam_word at 0x91); Genie writes 1 for each, for a
+    //  normal spectrum.
+    const uint16_t rows = ReadUInt16( *readData, dataStart + 0x8D );
+    const uint16_t groups = ReadUInt16( *readData, dataStart + 0x91 );
+
+    return (rows <= 1) && (groups <= 1);
+  }
+
+  return false;
 }
 
 
@@ -3574,6 +3636,70 @@ bool CAMIO::GetSampleStrings( std::string &sample_id,
 
   return false;
 }
+
+
+bool CAMIO::GetEmbeddedFile( EmbeddedFile &file )
+{
+  file = EmbeddedFile{};
+
+  const auto pos_iter = blockAddresses.find( CAMBlock::EMBEDDED_FILE );
+  if( pos_iter == end(blockAddresses) )
+    return false;
+
+  const std::vector<byte_type> &data = *readData;
+  const size_t pos = pos_iter->second;
+
+  // See `CAMBlock::EMBEDDED_FILE` for the layout of this block's header
+  const uint32_t header_size = ReadUInt32( data, pos );
+  const uint32_t total_size = ReadUInt32( data, pos + 4 );
+  const uint32_t block_id = ReadUInt32( data, pos + 8 );
+
+  if( block_id != static_cast<uint32_t>(CAMBlock::EMBEDDED_FILE) )
+    throw std::runtime_error( "GetEmbeddedFile: block ID mismatch" );
+
+  if( (header_size < 12) || (total_size < header_size) )
+    throw std::runtime_error( "GetEmbeddedFile: invalid header or total size" );
+
+  validate_bounds( data, pos, total_size, "GetEmbeddedFile: reading block" );
+
+  file.originalPath = read_padded_string( data, pos + 12, header_size - 12 );
+
+  // A ZIP local file header; we only need the one member, so dont need the central directory.
+  const size_t zip_pos = pos + header_size;
+  const size_t block_end = pos + total_size;
+  const size_t local_header_size = 30;
+
+  if( (block_end - zip_pos) < local_header_size )
+    throw std::runtime_error( "GetEmbeddedFile: too small for ZIP header" );
+
+  if( ReadUInt32( data, zip_pos ) != 0x04034b50 )  // "PK\3\4"
+    throw std::runtime_error( "GetEmbeddedFile: missing ZIP local header" );
+
+  const uint16_t flags = ReadUInt16( data, zip_pos + 6 );
+  file.compressionMethod = ReadUInt16( data, zip_pos + 8 );
+  file.crc = ReadUInt32( data, zip_pos + 14 );
+  const uint32_t compressed_size = ReadUInt32( data, zip_pos + 18 );
+  file.uncompressedSize = ReadUInt32( data, zip_pos + 22 );
+  const uint16_t name_len = ReadUInt16( data, zip_pos + 26 );
+  const uint16_t extra_len = ReadUInt16( data, zip_pos + 28 );
+
+  // Bit 0 is encryption, and with bit 3 the sizes come after the data, rather than in this header.
+  if( flags & 0x0009 )
+    throw std::runtime_error( "GetEmbeddedFile: unsupported ZIP flags (encrypted or data descriptor)" );
+
+  if( (file.compressionMethod != 0) && (file.compressionMethod != 8) )
+    throw std::runtime_error( "GetEmbeddedFile: unsupported ZIP compression method "
+                              + std::to_string(file.compressionMethod) );
+
+  const size_t data_pos = zip_pos + local_header_size + name_len + extra_len;
+  if( (data_pos > block_end) || (compressed_size > (block_end - data_pos)) )
+    throw std::runtime_error( "GetEmbeddedFile: ZIP member extends past end of block" );
+
+  file.memberName.assign( reinterpret_cast<const char *>(&data[zip_pos + local_header_size]), name_len );
+  file.compressedData.assign( begin(data) + data_pos, begin(data) + data_pos + compressed_size );
+
+  return true;
+}//bool GetEmbeddedFile( EmbeddedFile &file )
 
 
 // assign key the line for a nuclide

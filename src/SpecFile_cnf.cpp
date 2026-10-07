@@ -36,6 +36,10 @@
 #include <algorithm>
 #include <functional>
 
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+#include <zlib.h>
+#endif
+
 #include "3rdparty/date/include/date/date.h"
 
 #include "SpecUtils/CAMIO.h"
@@ -45,7 +49,10 @@
 #include "SpecUtils/StringAlgo.h"
 #include "SpecUtils/EnergyCalibration.h"
 #include "SpecUtils/SpecFile_location.h"
-#include "SpecUtils/CAMIO.h"
+
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+#include "SpecUtils/UriSpectrum.h"
+#endif
 
 using namespace std;
 
@@ -110,10 +117,10 @@ void SpecFile::load_cnf_using_reader( CAMInputOutput::CAMIO &reader )
   size_t num_chnanels = spec.size();
 
 #if( PERFORM_DEVELOPER_CHECKS )
-  // Cross-check channel count: the SPEC block header stores channels as uint16 (which our
-  //  GetSpectrum uses), but the ACQP section stores the authoritative count as a uint32 at
-  //  offset 0x89.  If these disagree, it may indicate a file with >32768 channels where the
-  //  SPEC header overflowed, or a corrupt file.
+  // Cross-check channel count: GetSpectrum reads the uint16 channels allocated in the SPEC block
+  //  header, trimmed to the authoritative uint32 count in the ACQP section (offset 0x89).  So
+  //  they only disagree if ACQP says more than was allocated - e.g., a file with >32768 channels
+  //  where the SPEC header overflowed, or a corrupt file.
   {
     const uint32_t acqp_nchan = reader.GetNumChannelsFromAcqp();
     if( acqp_nchan > 0 && acqp_nchan != static_cast<uint32_t>(num_chnanels) )
@@ -321,9 +328,13 @@ bool SpecFile::load_from_cnf( std::istream &input )
     //create the camio object and send it the bits
     CAMInputOutput::CAMIO cam;
     cam.ReadFile(file_bits);
-    
+
     load_cnf_using_reader( cam );
-    
+
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+    load_cnf_embedded_files( cam );
+#endif
+
     cleanup_after_load();
   }catch ( std::exception &e )
   {
@@ -337,6 +348,84 @@ bool SpecFile::load_from_cnf( std::istream &input )
   
   return true;
 }//bool load_from_cnf( std::istream &input )
+
+
+#if( SpecUtils_ENABLE_URI_SPECTRA )
+void SpecFile::load_cnf_embedded_files( CAMInputOutput::CAMIO &reader )
+{
+  // Each embedded CNF can embed its own background, so we walk the chain with a loop, rather
+  //  than recursion; the count limit guards against a ZIP that (maliciously) contains itself.
+  const size_t max_embedded_files = 64;
+  const size_t max_embedded_size = 64*1024*1024;
+
+  CAMInputOutput::CAMIO embedded_reader; //Owns the data of the CNF currently being looked at
+  CAMInputOutput::CAMIO *current = &reader;
+  CAMInputOutput::EmbeddedFile file;
+  size_t num_read = 0;
+
+  try
+  {
+    while( current->GetEmbeddedFile( file ) )
+    {
+      if( num_read >= max_embedded_files )
+        throw runtime_error( "more than " + std::to_string(max_embedded_files) + " nested files" );
+
+      if( file.uncompressedSize > max_embedded_size )
+        throw runtime_error( "it is too large ("
+                             + std::to_string(file.uncompressedSize) + " bytes)" );
+
+      vector<uint8_t> file_bits;
+      if( file.compressionMethod == 8 )
+        raw_deflate_decompress( file.compressedData.data(), file.compressedData.size(),
+                                file_bits, max_embedded_size );
+      else
+        file_bits.swap( file.compressedData );
+
+      if( file_bits.size() != file.uncompressedSize )
+        throw runtime_error( "decompressed size didnt match expected" );
+
+      // zlib was linked to give us DEFLATE, so we may as well also use its CRC-32
+      const uLong crc = crc32( crc32(0L, Z_NULL, 0), file_bits.data(),
+                               static_cast<uInt>(file_bits.size()) );
+      if( crc != file.crc )
+        throw runtime_error( "CRC check failed" );
+
+      // Re-assigning a CAMIO resets all its cached data; `current` may point to `embedded_reader`,
+      //  but `file` already holds everything we need from it.
+      embedded_reader = CAMInputOutput::CAMIO();
+      embedded_reader.ReadFile( file_bits );
+      current = &embedded_reader;
+
+      // We use a plain SpecFile to parse it, so we only get the Measurement; we dont want
+      //  embedded files affecting file-level info, or the descendant classes CNF parsing.
+      SpecFile embedded;
+      embedded.SpecFile::load_cnf_using_reader( embedded_reader );
+      if( embedded.measurements_.size() != 1 )
+        throw runtime_error( "no spectrum found" );
+
+      const shared_ptr<Measurement> meas = embedded.measurements_[0];
+
+      // Put the embedded file's warnings on its Measurement, so they arent taken to be about this file
+      meas->parse_warnings_.insert( end(meas->parse_warnings_),
+                                    begin(embedded.parse_warnings_), end(embedded.parse_warnings_) );
+      meas->source_type_ = SourceType::Background;
+      meas->sample_number_ = static_cast<int>( measurements_.size() + 1 );
+
+      const string &path = file.originalPath.empty() ? file.memberName : file.originalPath;
+      meas->remarks_.push_back( "Embedded background file: " + path );
+
+      measurements_.push_back( meas );
+      ++num_read;
+    }//while( current->GetEmbeddedFile( file ) )
+  }catch( std::exception &e )
+  {
+    // We keep any files we did successfully read
+    parse_warnings_.push_back( "Failed to read embedded background file"
+                               + (file.memberName.empty() ? string() : (" '" + file.memberName + "'"))
+                               + ": " + e.what() );
+  }//try / catch
+}//void load_cnf_embedded_files( CAMInputOutput::CAMIO &reader )
+#endif //SpecUtils_ENABLE_URI_SPECTRA
 
 
 bool SpecFile::write_cnf( std::ostream &output, std::set<int> sample_nums,
