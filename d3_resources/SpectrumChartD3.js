@@ -7424,22 +7424,28 @@ SpectrumChartD3.prototype.drawPeaks = function() {
         // GADRAS peak shape: analytic exponentially-modified-Gaussian (EMG) form.
         // Port of PeakDists_imp.hpp gadras_build_peak_shape / gadras_peak_shape_cdf.  The skewed
         // shape is a Gaussian core mixed with one-sided exponential tails convolved with the
-        // Gaussian (a closed-form EMG) -- the continuum limit of the old 128-point discrete form.
+        // Gaussian (a closed-form EMG) -- the continuum limit of GADRAS's 128-point discrete form.
         // Skew params: Skew0=low_skew, Skew1=high_skew, Skew2=low_power, Skew3=high_power,
-        //              Skew4=low_extent, Skew5=high_extent.  (PVT sub-mode is not implemented.)
+        //              Skew4=low_extent, Skew5=high_extent.
+        // If the C++ was built with USE_GADRAS_TRUNCATION, peak.GadrasTrunc = [R_low, R_high] gives
+        // where (in shape-zeta units) GADRAS's tails stop, and we truncate them the same way.
+        // (The PVT-like tail is not an exposed skew type, so is not implemented here.)
         const isCZT = (peak.skewType === 'GadrasCZT');
         const low_skew = peak.Skew0[0], high_skew = peak.Skew1[0];
         const low_power = peak.Skew2[0], high_power = peak.Skew3[0];
         const low_extent = peak.Skew4[0], high_extent = peak.Skew5[0];
+        const trunc = (Array.isArray(peak.GadrasTrunc) && (peak.GadrasTrunc.length === 2)) ? peak.GadrasTrunc : null;
+        const low_reach = trunc ? trunc[0] : 0.0, high_reach = trunc ? trunc[1] : 0.0;
         const energy = mean;
         const INV_SQRT2 = 0.70710678118654752440;
         const INV_SQRT_PI = 0.56418958354775628695;
-        const snorm_cdf = (z) => 0.5*(1.0 + erf(z*INV_SQRT2));
+        const snorm_cdf = (z) => 0.5*erfc(-z*INV_SQRT2);
 
-        // erfcx(x) = exp(x*x)*erfc(x) for x>=0.  JS has no native erfc and 1-erf loses precision
-        // for x>~5, so we switch to the asymptotic series there (also avoids exp(x*x) overflow).
+        // erfcx(x) = exp(x*x)*erfc(x) for x>=0, using the accurate erfc() above (1-erf(x), with
+        // erf() only good to ~1E-7 absolute, is badly wrong for small tail scales); beyond x=25 we
+        // use the asymptotic series to avoid exp(x*x) overflow.
         const erfcx_nonneg = (x) => {
-          if( x < 5.0 ) return Math.exp(x*x)*(1.0 - erf(x));
+          if( x < 25.0 ) return Math.exp(x*x)*erfc(x);
           const inv_2x2 = 1.0/(2.0*x*x);
           let term = 1.0, sum = 1.0;
           for( let k = 1; k <= 6; ++k ){ term *= -(2*k-1)*inv_2x2; sum += term; }
@@ -7449,7 +7455,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
         const stable_tail_term = (exp_arg, erfc_arg, z) => {
           if( (exp_arg > 87.0) || (erfc_arg > 10.0) )
             return 0.5*erfcx_nonneg(erfc_arg)*Math.exp(-0.5*z*z);
-          return 0.5*Math.exp(exp_arg)*(1.0 - erf(erfc_arg));
+          return 0.5*Math.exp(exp_arg)*erfc(erfc_arg);
         };
         const left_tail_cdf = (z, s) => {
           const exp_arg = z/s + 1.0/(2.0*s*s);
@@ -7461,12 +7467,14 @@ SpectrumChartD3.prototype.drawPeaks = function() {
           const erfc_arg = (1.0/s - z)*INV_SQRT2;
           return snorm_cdf(z) - stable_tail_term(exp_arg, erfc_arg, z);
         };
+        // weight e^{-R/s} of the shifted copy subtracted off to truncate a tail at R (0 => none).
+        const trunc_weight = (s, reach) => ((reach <= 0.0) || (reach > 40.0*s)) ? 0.0 : Math.exp(-reach/s);
 
-        // sum_skew (GetSumSkew): raw magnitudes, energy-scaled only when power > 0.
+        // sum_skew (GetSumSkew): raw magnitudes, energy-scaled only when power >= 0.
         let skew_p = Math.abs(high_skew);
-        if( (skew_p > 0) && (high_power > 0) ) skew_p *= Math.pow(energy/661.0, high_power);
+        if( high_power >= 0 ) skew_p *= Math.pow(energy/661.0, high_power);
         let skew_n = Math.abs(low_skew);
-        if( (skew_n > 0) && (low_power > 0) ) skew_n *= Math.pow(energy/661.0, low_power);
+        if( low_power >= 0 ) skew_n *= Math.pow(energy/661.0, low_power);
         const sum_skew = Math.min(1.0, (skew_p + skew_n)/100.0);
 
         const gauss0 = snorm_cdf((x0-mean)/sigma), gauss1 = snorm_cdf((x1-mean)/sigma);
@@ -7479,17 +7487,24 @@ SpectrumChartD3.prototype.drawPeaks = function() {
           return amp * (gauss1 - gauss0);
 
         const denom = low_val + high_val;
-        const scn = (denom > 0.0) ? (low_val/denom) : 0.0;
-        const scp = (denom > 0.0) ? (high_val/denom) : 0.0;
+        const scn = low_val/denom;
+        const scp = high_val/denom;
         const slope_scale = (extent) => (extent >= 0.0) ? (1.0 + extent/3.0) : Math.exp(extent/3.0);
 
-        // Build area-normalized EMG tail mixtures (weight includes SCN/SCP).
-        const low_w = [], low_s = [], high_w = [], high_s = [];
-        const fill_side = (wArr, sArr, coeff, scale, side_weight) => {
+        // Build area-normalized (over the possibly-truncated range) EMG tail mixtures; the
+        //  weights include SCN/SCP.
+        const low_w = [], low_s = [], low_t = [], high_w = [], high_s = [], high_t = [];
+        const fill_side = (wArr, sArr, tArr, coeff, scale, side_weight, reach) => {
           let area = 0.0;
-          for( let i = 0; i < coeff.length; ++i ) area += coeff[i]*scale[i];
+          const comp_area = [];
           for( let i = 0; i < coeff.length; ++i ) {
-            wArr.push( (area > 0.0) ? (side_weight*coeff[i]*scale[i]/area) : 0.0 );
+            const tw = trunc_weight(scale[i], reach);
+            tArr.push( tw );
+            comp_area.push( coeff[i]*scale[i]*(1.0 - tw) );
+            area += comp_area[i];
+          }
+          for( let i = 0; i < coeff.length; ++i ) {
+            wArr.push( (area > 0.0) ? (side_weight*comp_area[i]/area) : 0.0 );
             sArr.push( scale[i] );
           }
         };
@@ -7498,20 +7513,20 @@ SpectrumChartD3.prototype.drawPeaks = function() {
           const lss = slope_scale(low_extent);
           if( isCZT ) {
             const slopen = 0.1*lss*low_val;
-            fill_side(low_w, low_s, [0.8, 0.2], [slopen, slopen/0.8], scn);
+            fill_side(low_w, low_s, low_t, [0.8, 0.2], [slopen, slopen/0.8], scn, low_reach);
           } else {
             const slopen = 0.2*lss*low_val, fr = 0.04*low_val;
-            fill_side(low_w, low_s, [1.0-fr, fr], [slopen, slopen/0.4], scn);
+            fill_side(low_w, low_s, low_t, [1.0-fr, fr], [slopen, slopen/0.4], scn, low_reach);
           }
         }
         if( high_val > 0.0 ) {
           const hss = slope_scale(high_extent);
           if( isCZT ) {
             const slopep = 0.1*hss*high_val;
-            fill_side(high_w, high_s, [0.8, 0.2], [slopep, slopep/0.65], scp);
+            fill_side(high_w, high_s, high_t, [0.8, 0.2], [slopep, slopep/0.65], scp, high_reach);
           } else {
             const slopep = 0.2*hss*high_val;
-            fill_side(high_w, high_s, [1.0], [slopep], scp);
+            fill_side(high_w, high_s, high_t, [1.0], [slopep], scp, high_reach);
           }
         }
 
@@ -7524,10 +7539,18 @@ SpectrumChartD3.prototype.drawPeaks = function() {
           const z_shape = zeta*factor;
           const shape_gauss = snorm_cdf(z_shape);
           let shp = shape_gauss;
-          for( let i = 0; i < low_w.length; ++i )
-            shp += low_w[i]*(left_tail_cdf(z_shape, low_s[i]) - shape_gauss);
-          for( let i = 0; i < high_w.length; ++i )
-            shp += high_w[i]*(right_tail_cdf(z_shape, high_s[i]) - shape_gauss);
+          for( let i = 0; i < low_w.length; ++i ) {
+            let F = left_tail_cdf(z_shape, low_s[i]);
+            if( low_t[i] > 0.0 )
+              F = (F - low_t[i]*left_tail_cdf(z_shape + low_reach, low_s[i]))/(1.0 - low_t[i]);
+            shp += low_w[i]*(F - shape_gauss);
+          }
+          for( let i = 0; i < high_w.length; ++i ) {
+            let F = right_tail_cdf(z_shape, high_s[i]);
+            if( high_t[i] > 0.0 )
+              F = (F - high_t[i]*right_tail_cdf(z_shape - high_reach, high_s[i]))/(1.0 - high_t[i]);
+            shp += high_w[i]*(F - shape_gauss);
+          }
           const r = (1.0 - sum_skew)*gauss + sum_skew*shp;
           return Math.min(1.0, Math.max(0.0, r));
         };
