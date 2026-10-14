@@ -694,15 +694,19 @@ namespace SpecUtils
    @resulting_counts Results of the rebinning
    
    If original_counts.size() is one less than original_energies.size, then resulting_counts.size()
-   will also be one less than new_energies.size(), otherwise new_energies and resulting_counts will
-   be same size.
-   
-   Not incredably well tested, but appears to be better than the previous
-   rebin_by_lower_edge(...), but it so it currently used.  There is some code in
-   the function that does test this function if PERFORM_DEVELOPER_CHECKS is true.
-   
-   There are some tests started for this function in testing/testRebinByLowerEnergy.cpp.
-   
+   will also be one less than new_energies.size() (i.e., both energy vectors include the upper edge of
+   their last channel), otherwise new_energies and resulting_counts will be same size, and the upper
+   edge of the last original channel is extrapolated from the width of the previous channel.
+
+   Counts are taken to be uniformly distributed in energy across each original channel, and channel
+   edges may be arbitrarily non-uniform.  Counts below the new energy range are placed in the first
+   new channel, and counts above it in the last new channel, so the total is always conserved.  A
+   zero-width original channel goes into the new channel whose [lower, upper) range contains it.
+
+   resulting_counts may be the same vector as original_counts.
+
+   Tests are in unit_tests/test_rebin_by_lower_energy.cpp.
+
    Throw exception if any input has less than four channels.
    */
   void rebin_by_lower_edge( const std::vector<float> &original_energies,

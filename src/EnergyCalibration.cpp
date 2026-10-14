@@ -1851,26 +1851,14 @@ void rebin_by_lower_edge( const std::vector<float> &original_energies,
                            const std::vector<float> &new_energies,
                            std::vector<float> &resulting_counts )
 {
-  // TODO: it turns out this function can really be a bottleneck!
-  //       And niavely it looks to be due, in some good part, memory access patterns being not
-  //       to great... need to cleanup memory access ordering
-  // TODO: remove all uses of 'old_nbin', and make sure logic of accessing counts/energies are correct
-  // TODO: reason through things, and cleanup where possible.
-  // TODO: make a version of this function that sums from one binning into another - this could save a lot of time
+  const size_t num_orig_counts = original_counts.size();
+  const size_t num_orig_energies = original_energies.size();
   
-  const size_t old_nbin = min( original_energies.size(), original_counts.size());
-  if( old_nbin < 4 )
+  if( std::min( num_orig_energies, num_orig_counts ) < 4 )
     throw runtime_error( "rebin_by_lower_edge: input must have more than 3 bins" );
   
   if( new_energies.size() < 4 )
     throw runtime_error( "rebin_by_lower_edge: output energy must have more than 3 bins" );
-  
-  const size_t num_orig_counts = original_counts.size();
-  const size_t num_orig_energies = original_energies.size();
-  
-  const bool has_upper = (num_orig_energies > num_orig_counts); //((num_orig_counts + 1) == num_orig_energies);
-  const size_t new_nbin = new_energies.size() - (has_upper ? 1 : 0);
-  
   
   if( (num_orig_energies < num_orig_counts) || (num_orig_energies > (num_orig_counts + 1)) )
   {
@@ -1879,180 +1867,88 @@ void rebin_by_lower_edge( const std::vector<float> &original_energies,
                         + " energies, vs " + std::to_string(num_orig_counts) + " channels." );
   }
   
+  const bool has_upper = (num_orig_energies > num_orig_counts);
+  const size_t new_nbin = new_energies.size() - (has_upper ? 1 : 0);
+  
   if( new_nbin < 4 )
     throw runtime_error( "rebin_by_lower_edge: output have more than 3 bins" );
   
-  
-  const double old_right = (num_orig_energies > num_orig_counts)
-                            ? original_energies[num_orig_counts]
-                            : 2.0*original_energies[num_orig_energies-1]-original_energies[num_orig_energies-2];
-  const double new_right = (num_orig_energies > num_orig_counts)
-                           ? new_energies.back()
-                           : 2.0*new_energies[new_energies.size()-1] - new_energies[new_energies.size()-2];
-  
-  resulting_counts.resize( new_nbin, 0.0f );
-  size_t newbinnum = 0;
-  while( new_energies[newbinnum] < original_energies[0] && newbinnum < (new_nbin-1) )
-    resulting_counts[newbinnum++] = 0.0f;
-  
-  //new_energies[newbinnum] is now >= original_energies[0]
-  //  Bin (newbinnum-1) spans from below original_energies[0] up to new_energies[newbinnum].
-  //  Sum the original counts that fall within [original_energies[0], new_energies[newbinnum]).
-  if( newbinnum && (new_energies[newbinnum] > original_energies[0]) )
+  // We write the output as we read the input, so if they are the same vector, use a temporary.
+  if( &resulting_counts == &original_counts )
   {
-    const double right_edge = static_cast<double>( new_energies[newbinnum] );
-    double sum = 0.0;
-    for( size_t j = 0; j < num_orig_counts; ++j )
-    {
-      const double ol = static_cast<double>( original_energies[j] );
-      const double ou = ((j + 1) < num_orig_energies)
-                        ? static_cast<double>( original_energies[j + 1] )
-                        : old_right;
-      if( ol >= right_edge )
-        break;
-      if( ou <= right_edge )
-        sum += original_counts[j];
-      else
-      {
-        sum += static_cast<double>(original_counts[j]) * (right_edge - ol) / (ou - ol);
-        break;
-      }
-    }//for( size_t j = 0; j < num_orig_counts; ++j )
-
-    resulting_counts[newbinnum - 1] = static_cast<float>( sum );
-  }
+    vector<float> answer;
+    rebin_by_lower_edge( original_energies, original_counts, new_energies, answer );
+    resulting_counts.swap( answer );
+    return;
+  }//if( output aliases input )
   
-  size_t oldbinlow = 0, oldbinhigh = 0;
-  for( ; newbinnum < new_nbin; ++newbinnum )
+  // Upper edge of the last original channel; extrapolated if not explicitly given.
+  const size_t last_orig = num_orig_counts - 1;
+  const double old_right = has_upper
+                   ? static_cast<double>( original_energies[num_orig_counts] )
+                   : (2.0*original_energies[last_orig] - original_energies[last_orig - 1]);
+  
+  // Counts are taken as uniform in energy across each original channel.  The first new channel is
+  //  treated as extending down to -inf, and the last new channel up to +inf, so counts outside the
+  //  new energy range land in the end channels and the total is conserved.  We sweep the original
+  //  channels once, accumulating the current new channel in double, and write it out once we pass
+  //  its upper edge.  An original channel straddling new edges is split by overlap, with its last
+  //  piece getting the remainder, so each channel's counts are conserved exactly.
+  resulting_counts.resize( new_nbin );
+  
+  const size_t last_new_index = new_nbin - 1;
+  size_t new_index = 0;
+  double new_upper = new_energies[1];
+  double new_sum = 0.0;
+  
+  // Writes out the current new channel, and moves to the next one; the last new channel has no
+  //  upper limit.
+  const auto next_new_channel = [&](){
+    resulting_counts[new_index] = static_cast<float>( new_sum );
+    new_sum = 0.0;
+    ++new_index;
+    new_upper = (new_index < last_new_index)
+                ? static_cast<double>( new_energies[new_index + 1] )
+                : std::numeric_limits<double>::infinity();
+  };
+  
+  double lower = original_energies[0];
+  for( size_t i = 0; i < num_orig_counts; ++i )
   {
-    const double newbin_lower = new_energies[newbinnum];
-    const double newbin_upper = ( ((newbinnum+1) < new_energies.size())
-                                 ? static_cast<double>(new_energies[newbinnum+1])
-                                 : new_right );
+    const double upper = ((i + 1) < num_orig_energies)
+                         ? static_cast<double>( original_energies[i + 1] )
+                         : old_right;
+    const double counts = original_counts[i];
     
-    double old_lower_low = 0.0, old_lower_up = 0.0, old_upper_low = 0.0, old_upper_up = 0.0;
+    while( (new_index < last_new_index) && (lower >= new_upper) )
+      next_new_channel();
     
-    for( ; oldbinlow < old_nbin; ++oldbinlow )
+    if( upper <= new_upper )
     {
-      old_lower_low = original_energies[oldbinlow];
-      if( (oldbinlow+1) < num_orig_energies )
-        old_lower_up = original_energies[oldbinlow+1];
-      else
-        old_lower_up = old_right;
-      
-      if( newbin_lower >= old_lower_low && newbin_lower < old_lower_up )
-        break;
-    }
-    
-    double sum_lower_to_upper = 0.0;
-    for( oldbinhigh = oldbinlow; oldbinhigh < old_nbin; ++oldbinhigh )
+      // Entire channel is in the current new channel (also catches zero-width channels)
+      new_sum += counts;
+    }else
     {
-      old_upper_low = original_energies[oldbinhigh];
-      if( (oldbinhigh+1) < num_orig_energies )
-        old_upper_up = original_energies[oldbinhigh+1];
-      else
-        old_upper_up = old_right;
-      
-      if( newbin_upper >= old_upper_low && newbin_upper < old_upper_up )
-        break;
-      sum_lower_to_upper += original_counts[oldbinhigh];
-    }
-    
-    //new binning goes higher than old binning, lets take care of the last
-    //  fraction of a bin, and zero everything else out
-    if( oldbinhigh == num_orig_counts )
-    {
-      old_upper_low = original_energies[num_orig_counts-1];
-      old_upper_up = old_right;
-      
-      //maybe more numerically accurate if we remove the next line, and uncomment
-      //  the next two commented lines.  Didnt do because I didnt want to test
-      resulting_counts[newbinnum] = static_cast<float>( sum_lower_to_upper );
-      
-      if( oldbinlow != num_orig_counts )
+      const double density = counts / (upper - lower);
+      double x = lower, remaining = counts;
+      while( (new_index < last_new_index) && (upper > new_upper) )
       {
-        const double lower_old_width = old_lower_up - old_lower_low;
-        const double lower_delta_energy = double(newbin_lower)-double(original_energies[oldbinlow]);
-        const double lower_bin_delta_counts = original_counts[oldbinlow];
-        const double lower_frac_energy = lower_delta_energy/lower_old_width;
-        
-        //        sum_lower_to_upper -= lower_bin_delta_counts*lower_frac_energy;
-        resulting_counts[newbinnum] -= static_cast<float>(lower_bin_delta_counts*lower_frac_energy);
+        const double piece = density * (new_upper - x);
+        new_sum += piece;
+        remaining -= piece;
+        x = new_upper;
+        next_new_channel();
       }
       
-      //      resulting_counts[newbinnum] = static_cast<float>( sum_lower_to_upper );
-      
-      newbinnum++;
-      while( newbinnum < new_nbin )
-        resulting_counts[newbinnum++] = 0.0f;
-      break;
-    }
+      new_sum += remaining;
+    }//if( channel fully in current new channel ) / else
     
-    const double lower_old_width = old_lower_up - old_lower_low;
-    const double upper_old_width = old_upper_up - old_upper_low;
-    
-    const double lower_bin_delta_counts = original_counts[oldbinlow];
-    const double upper_bin_delta_counts = original_counts[oldbinhigh];
-    
-    const double lower_delta_energy = double(newbin_lower)-double(original_energies[oldbinlow]);
-    const double upper_delta_energy = double(newbin_upper)-double(original_energies[oldbinhigh]);
-    
-    const double lower_frac_energy = lower_delta_energy/lower_old_width;
-    const double upper_frac_energy = upper_delta_energy/upper_old_width;
-    
-    //interpolate sum height at newbin_lower
-    resulting_counts[newbinnum] = static_cast<float>( sum_lower_to_upper + upper_bin_delta_counts*upper_frac_energy-lower_bin_delta_counts*lower_frac_energy );
-  }//for( ; newbinnum < (new_nbin-1); ++newbinnum )
+    lower = upper;
+  }//for( size_t i = 0; i < num_orig_counts; ++i )
   
-  
-  //capture case where new energies starts higher than the original energies, so
-  //  we should put the contents of the lower energy bins into the first bin
-  //  of the new counts
-  if( original_energies[0] < new_energies[0] )
-  {
-    size_t i = 0;
-    while( (i<(num_orig_counts-1)) && (original_energies[i+1]<new_energies[0]) )
-      resulting_counts[0] += original_counts[i++];
-    
-    //original_energies[i+1] is now >= new_energies[0], so bin i contains new_energies[0]
-
-    if( (i < num_orig_counts) && ((i + 1) < num_orig_energies) )
-    {
-      const double ol = static_cast<double>( original_energies[i] );
-      const double ou = static_cast<double>( original_energies[i + 1] );
-      const double ne = static_cast<double>( new_energies[0] );
-      if( ne >= ou )
-        resulting_counts[0] += original_counts[i]; // fully below new range
-      else
-        resulting_counts[0] += static_cast<float>(
-            static_cast<double>(original_counts[i]) * (ne - ol) / (ou - ol) );
-    }
-    else if( i < num_orig_counts )
-      resulting_counts[0] += original_counts[i];  // No upper edge available; add full remaining bin
-  }//if( original_energies[0] < new_energies[0] )
-  
-  //Now capture the case where the old binning extends further than new binning
-  if( old_right > new_right )
-  {
-    // Add the remaining fraction of oldbinhigh that is above new_right
-    if( oldbinhigh < old_nbin )
-    {
-      const double ol = static_cast<double>( original_energies[oldbinhigh] );
-      const double ou = ((oldbinhigh + 1) < num_orig_energies)
-                        ? static_cast<double>( original_energies[oldbinhigh + 1] )
-                        : old_right;
-      const double remaining_frac = (ou - new_right) / (ou - ol);
-      resulting_counts[new_nbin - 1] += static_cast<float>(
-          static_cast<double>(original_counts[oldbinhigh]) * remaining_frac );
-      ++oldbinhigh; // already handled; skip in the loop below
-    }
-
-    // Add all old bins entirely above the new range
-    for( ; oldbinhigh < old_nbin; ++oldbinhigh )
-      resulting_counts[new_nbin - 1] += original_counts[oldbinhigh];
-  }//if( old_right > new_right )
-  
-  
+  resulting_counts[new_index] = static_cast<float>( new_sum );
+  for( ++new_index; new_index < new_nbin; ++new_index )
+    resulting_counts[new_index] = 0.0f;
   
 #if( PERFORM_DEVELOPER_CHECKS )
   double oldsum = 0.0, newsum = 0.0;
@@ -2061,7 +1957,7 @@ void rebin_by_lower_edge( const std::vector<float> &original_energies,
   for( const float f : resulting_counts )
     newsum += f;
   
-  if( (fabs(oldsum - newsum) > (old_nbin*0.1/16384.0)) && (fabs(oldsum - newsum) > 1.0E-7*oldsum) )
+  if( (fabs(oldsum - newsum) > (num_orig_counts*0.1/16384.0)) && (fabs(oldsum - newsum) > 1.0E-7*oldsum) )
   {
     static std::mutex m;
     

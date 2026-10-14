@@ -22,9 +22,15 @@
  */
 
 #include <cmath>
+#include <limits>
+#include <memory>
+#include <random>
+#include <string>
 #include <vector>
+#include <cassert>
 #include <numeric>
 #include <iostream>
+#include <algorithm>
 
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include "doctest.h"
@@ -467,3 +473,615 @@ TEST_CASE( "Pre-loop spanning 3+ old bins then halves" )
   }
 }
 
+
+
+namespace
+{
+  /** Reference rebin, written independently of rebin_by_lower_edge: each original channel is spread
+   uniformly over [lower, upper), and overlapped against every new channel it touches (found by binary
+   search).  The first new channel is open below, and the last open above, so out-of-range counts land
+   in the end channels.  A zero-width original channel goes to the new channel whose [lower, upper)
+   contains it.  All in double.
+   */
+  std::vector<double> reference_rebin( const std::vector<float> &orig_energies,
+                                       const std::vector<float> &orig_counts,
+                                       const std::vector<float> &new_energies )
+  {
+    const double inf = std::numeric_limits<double>::infinity();
+    const size_t nold = orig_counts.size();
+    const bool has_upper = (orig_energies.size() > nold);
+    const size_t nnew = new_energies.size() - (has_upper ? 1 : 0);
+    const double old_right = has_upper ? double(orig_energies[nold])
+                                       : 2.0*orig_energies[nold-1] - orig_energies[nold-2];
+    
+    // Interior new edges; new channel k spans [inner[k-1], inner[k]), with open ends
+    const std::vector<float> inner( begin(new_energies) + 1, begin(new_energies) + nnew );
+    
+    std::vector<double> answer( nnew, 0.0 );
+    for( size_t i = 0; i < nold; ++i )
+    {
+      const double a = orig_energies[i];
+      const double b = ((i + 1) < orig_energies.size()) ? double(orig_energies[i+1]) : old_right;
+      const double c = orig_counts[i];
+      
+      // First new channel with upper edge above `a`
+      size_t k = std::upper_bound( begin(inner), end(inner), a ) - begin(inner);
+      if( !(b > a) )
+      {
+        answer[k] += c;
+        continue;
+      }
+      
+      for( ; k < nnew; ++k )
+      {
+        const double lo = (k == 0) ? -inf : double(inner[k-1]);
+        const double hi = ((k + 1) == nnew) ? inf : double(inner[k]);
+        if( lo >= b )
+          break;
+        const double overlap = std::min( b, hi ) - std::max( a, lo );
+        if( overlap > 0.0 )
+          answer[k] += c * (overlap / (b - a));
+      }
+    }//for( size_t i = 0; i < nold; ++i )
+    
+    return answer;
+  }//reference_rebin(...)
+  
+  
+  /** Rebins and checks every channel against reference_rebin(...), and the total against the input.
+   Returns number of channels outside tolerance (also reported via doctest).
+   */
+  size_t check_against_reference( const std::vector<float> &orig_energies,
+                                  const std::vector<float> &orig_counts,
+                                  const std::vector<float> &new_energies,
+                                  const std::string &label )
+  {
+    std::vector<float> result;
+    SpecUtils::rebin_by_lower_edge( orig_energies, orig_counts, new_energies, result );
+    const std::vector<double> ref = reference_rebin( orig_energies, orig_counts, new_energies );
+    REQUIRE( result.size() == ref.size() );
+    
+    double total = 0.0, abs_total = 0.0, newsum = 0.0;
+    for( const float c : orig_counts )
+    {
+      total += c;
+      abs_total += fabs( c );
+    }
+    for( const float c : result )
+      newsum += c;
+    
+    size_t nfail = 0, worst_index = 0;
+    double worst_excess = 0.0;
+    for( size_t k = 0; k < ref.size(); ++k )
+    {
+      // Float rounding of the output is ~6e-8 relative; the absolute floor covers double-precision
+      //  round-off for channels that get a tiny sliver of a large original channel.
+      const double tol = 1.2e-7*fabs( ref[k] ) + 1.0e-12*abs_total;
+      const double diff = fabs( result[k] - ref[k] );
+      if( diff > tol )
+      {
+        ++nfail;
+        if( (diff - tol) > worst_excess )
+        {
+          worst_excess = diff - tol;
+          worst_index = k;
+        }
+      }
+    }//for( loop over channels )
+    
+    CHECK_MESSAGE( nfail == 0, label << ": " << nfail << " of " << ref.size()
+                   << " channels differ from reference; worst is channel " << worst_index
+                   << " (got " << result[worst_index] << ", expected " << ref[worst_index] << ")" );
+    CHECK_MESSAGE( fabs(newsum - total) <= 1.0E-7*abs_total,
+                   label << ": total " << newsum << " vs input " << total
+                   << " (rel diff " << (newsum - total)/abs_total << ")" );
+    return nfail;
+  }//check_against_reference(...)
+  
+  
+  /** Lower edges, starting at `start`, with each channel `width` wide times a random factor in [0.5,1.5). */
+  std::vector<float> jittered_edges( const size_t nedges, const double start, const double width,
+                                     const double zero_width_prob, std::mt19937 &rng )
+  {
+    std::uniform_real_distribution<double> jitter( 0.5, 1.5 ), unit( 0.0, 1.0 );
+    std::vector<float> edges( nedges );
+    double x = start;
+    for( size_t i = 0; i < nedges; ++i )
+    {
+      edges[i] = static_cast<float>( x );
+      if( unit(rng) >= zero_width_prob )
+        x += width * jitter( rng );
+    }
+    return edges;
+  }//jittered_edges(...)
+  
+  
+  /** Kinds of heavily non-uniform binning. */
+  enum class BinningKind : int
+  {
+    Geometric,    // log-spaced; widths vary by up to ~1e4 across the range
+    Quadratic,    // E = a*i + b*i^2, with b >> a
+    Sqrt,         // compressive; widths shrink with channel number
+    LogUniform,   // independent widths log-uniform in [1e-3, 1e2] keV
+    Jumps,        // mostly 1 keV, with 200 keV gaps and clusters of 1e-4 keV channels
+    FloatLimit,   // 10^-4.5 to 10^-1 keV widths at ~3 MeV; many round to zero width
+    DevPairLike,  // linear with a localized steep kink
+    NumKinds
+  };//enum class BinningKind
+  
+  
+  std::vector<float> make_binning( const BinningKind kind, const size_t nedges, std::mt19937 &rng )
+  {
+    std::uniform_real_distribution<double> unit( 0.0, 1.0 );
+    const auto uniform = [&]( const double a, const double b ) -> double { return a + (b - a)*unit(rng); };
+    
+    std::vector<float> edges( nedges );
+    switch( kind )
+    {
+      case BinningKind::Geometric:
+      {
+        const double r = uniform( 1.005, 1.1 );
+        for( size_t i = 0; i < nedges; ++i )
+          edges[i] = static_cast<float>( std::pow( r, double(i) ) );
+        break;
+      }
+        
+      case BinningKind::Quadratic:
+      {
+        const double a = uniform( 0.01, 0.5 ), b = uniform( 0.01, 1.0 );
+        for( size_t i = 0; i < nedges; ++i )
+          edges[i] = static_cast<float>( a*i + b*i*i );
+        break;
+      }
+        
+      case BinningKind::Sqrt:
+      {
+        const double s = uniform( 5.0, 50.0 );
+        for( size_t i = 0; i < nedges; ++i )
+          edges[i] = static_cast<float>( s*std::sqrt( double(i) ) );
+        break;
+      }
+        
+      case BinningKind::LogUniform:
+      case BinningKind::Jumps:
+      case BinningKind::FloatLimit:
+      {
+        double x = (kind == BinningKind::FloatLimit) ? 3000.0 : uniform( 0.0, 50.0 );
+        for( size_t i = 0; i < nedges; ++i )
+        {
+          edges[i] = static_cast<float>( x );
+          if( kind == BinningKind::LogUniform )
+          {
+            x += std::pow( 10.0, uniform( -3.0, 2.0 ) );
+          }else if( kind == BinningKind::FloatLimit )
+          {
+            x += std::pow( 10.0, uniform( -4.5, -1.0 ) );
+          }else
+          {
+            const double u = unit( rng );
+            x += (u < 0.03) ? 200.0 : ((u < 0.15) ? 1.0E-4 : 1.0);
+          }
+        }
+        break;
+      }
+        
+      case BinningKind::DevPairLike:
+      {
+        // Slope of the kink term is at most ~2*amp, so amp >= -0.45*gain keeps edges increasing
+        const double n = double( nedges );
+        const double gain = uniform( 0.2, 3.0 );
+        const double center = uniform( 0.3*n, 0.7*n );
+        const double amp = uniform( -0.45, 5.0 ) * gain;
+        for( size_t i = 0; i < nedges; ++i )
+          edges[i] = static_cast<float>( gain*i + amp*0.02*n*std::tanh( (i - center)/(0.01*n + 1.0) ) );
+        break;
+      }
+        
+      case BinningKind::NumKinds:
+        assert( 0 );
+        break;
+    }//switch( kind )
+    
+    return edges;
+  }//make_binning(...)
+  
+  
+  const char *binning_kind_name( const BinningKind kind )
+  {
+    switch( kind )
+    {
+      case BinningKind::Geometric:   return "Geometric";
+      case BinningKind::Quadratic:   return "Quadratic";
+      case BinningKind::Sqrt:        return "Sqrt";
+      case BinningKind::LogUniform:  return "LogUniform";
+      case BinningKind::Jumps:       return "Jumps";
+      case BinningKind::FloatLimit:  return "FloatLimit";
+      case BinningKind::DevPairLike: return "DevPairLike";
+      case BinningKind::NumKinds:    break;
+    }
+    return "";
+  }//binning_kind_name(...)
+  
+  
+  /** Counts log-uniform over 8 decades, so some channels are tiny next to huge neighbors. */
+  std::vector<float> random_counts( const size_t n, std::mt19937 &rng )
+  {
+    std::uniform_real_distribution<double> exponent( -2.0, 6.0 );
+    std::vector<float> counts( n );
+    for( float &c : counts )
+      c = static_cast<float>( std::pow( 10.0, exponent(rng) ) );
+    return counts;
+  }//random_counts(...)
+}//namespace
+
+
+TEST_CASE( "New range entirely below original range" )
+{
+  // All counts are above the last new lower edge, so all go into the last new channel.
+  const std::vector<float> original_energies{ 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110 };
+  const std::vector<float> original_counts{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+  const std::vector<float> new_energies{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+  
+  std::vector<float> result;
+  SpecUtils::rebin_by_lower_edge( original_energies, original_counts, new_energies, result );
+  REQUIRE( result.size() == 10 );
+  for( size_t i = 0; i + 1 < result.size(); ++i )
+    CHECK( result[i] == 0.0f );
+  CHECK( result.back() == 55.0f );
+}
+
+
+TEST_CASE( "New range ends inside first original channel" )
+{
+  const std::vector<float> original_energies{ 100, 110, 120, 130, 140 };
+  const std::vector<float> original_counts{ 10, 20, 30, 40 };
+  
+  // Last new lower edge (105) splits the first original channel
+  const std::vector<float> new_energies{ 50, 60, 70, 80, 105, 108 };
+  std::vector<float> result;
+  SpecUtils::rebin_by_lower_edge( original_energies, original_counts, new_energies, result );
+  const std::vector<float> expected{ 0, 0, 0, 5, 95 };
+  REQUIRE( result.size() == expected.size() );
+  for( size_t i = 0; i < expected.size(); ++i )
+    CHECK_MESSAGE( fabs(result[i] - expected[i]) < 1.0E-4f, "Bin " << i << ": got " << result[i] );
+  
+  // Last new lower edge (95) below all original channels
+  const std::vector<float> new_energies_2{ 50, 60, 70, 80, 95, 99 };
+  SpecUtils::rebin_by_lower_edge( original_energies, original_counts, new_energies_2, result );
+  REQUIRE( result.size() == 5 );
+  CHECK( result.back() == 100.0f );
+  CHECK( std::accumulate( begin(result), end(result), 0.0 ) == 100.0 );
+}
+
+
+TEST_CASE( "No upper edge, new range starts inside last original channel" )
+{
+  // No upper edge given, so last original channel is [9,10)
+  const std::vector<float> original_energies{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+  const std::vector<float> original_counts{ 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 };
+  const std::vector<float> new_energies{ 9.25f, 9.5f, 9.75f, 10.0f, 10.25f };
+  
+  std::vector<float> result;
+  SpecUtils::rebin_by_lower_edge( original_energies, original_counts, new_energies, result );
+  // (-inf,9.5): channels 0-8 plus half of channel 9; then two quarters of channel 9; then nothing
+  const std::vector<float> expected{ 450 + 50, 25, 25, 0, 0 };
+  REQUIRE( result.size() == expected.size() );
+  for( size_t i = 0; i < expected.size(); ++i )
+    CHECK_MESSAGE( fabs(result[i] - expected[i]) < 1.0E-4f, "Bin " << i << ": got " << result[i] );
+}
+
+
+TEST_CASE( "Zero-width channels go to the new channel containing them" )
+{
+  {// Zero-width first channel, with a new edge exactly at its energy
+    const std::vector<float> original_energies{ 100, 100, 110, 120, 130 };
+    const std::vector<float> original_counts{ 7, 4, 4, 6 };
+    const std::vector<float> new_energies{ 80, 90, 100, 105, 115, 140 };
+    std::vector<float> result;
+    SpecUtils::rebin_by_lower_edge( original_energies, original_counts, new_energies, result );
+    const std::vector<float> expected{ 0, 0, 9, 4, 8 };
+    REQUIRE( result.size() == expected.size() );
+    for( size_t i = 0; i < expected.size(); ++i )
+      CHECK_MESSAGE( fabs(result[i] - expected[i]) < 1.0E-5f, "Bin " << i << ": got " << result[i] );
+  }
+  
+  {// Zero-width channel in the middle, sitting exactly on a new edge, goes to the upper new channel
+    const std::vector<float> original_energies{ 0, 1, 2, 2, 3, 4 };
+    const std::vector<float> original_counts{ 1, 2, 50, 3, 4 };
+    const std::vector<float> new_energies{ 0, 1, 2, 3, 4 };
+    std::vector<float> result;
+    SpecUtils::rebin_by_lower_edge( original_energies, original_counts, new_energies, result );
+    const std::vector<float> expected{ 1, 2, 53, 4 };
+    REQUIRE( result.size() == expected.size() );
+    for( size_t i = 0; i < expected.size(); ++i )
+      CHECK_MESSAGE( result[i] == expected[i], "Bin " << i << ": got " << result[i] );
+  }
+}
+
+
+TEST_CASE( "Many non-integer channels spilling past the new range" )
+{
+  // Previously the spill-over was summed in float, giving ~1e-6 relative error here
+  std::mt19937 rng( 1234 );
+  std::uniform_real_distribution<double> dist( 0.0, 68.5 );
+  
+  std::vector<float> original_energies( 16385 ), original_counts( 16384 );
+  for( size_t i = 0; i < original_energies.size(); ++i )
+    original_energies[i] = static_cast<float>( 0.183*i );
+  for( float &c : original_counts )
+    c = static_cast<float>( dist(rng) );
+  
+  std::vector<float> new_energies( 4097 );
+  for( size_t i = 0; i < new_energies.size(); ++i )
+    new_energies[i] = static_cast<float>( 0.1*i );
+  check_against_reference( original_energies, original_counts, new_energies, "upper spill" );
+  
+  // And starting well above the original range start
+  for( size_t i = 0; i < new_energies.size(); ++i )
+    new_energies[i] = static_cast<float>( 2500.0 + 0.1*i );
+  check_against_reference( original_energies, original_counts, new_energies, "lower+upper spill" );
+}
+
+
+TEST_CASE( "Output may alias input counts" )
+{
+  std::mt19937 rng( 42 );
+  const std::vector<float> original_energies = jittered_edges( 201, 10.0, 1.0, 0.0, rng );
+  const std::vector<float> new_energies = jittered_edges( 801, 5.0, 0.3, 0.0, rng );
+  const std::vector<float> counts = random_counts( 200, rng );
+  
+  std::vector<float> expected;
+  SpecUtils::rebin_by_lower_edge( original_energies, counts, new_energies, expected );
+  
+  std::vector<float> in_out = counts;
+  SpecUtils::rebin_by_lower_edge( original_energies, in_out, new_energies, in_out );
+  CHECK( in_out == expected );
+}
+
+
+TEST_CASE( "Identity rebin is bit-exact for non-uniform binning" )
+{
+  std::mt19937 rng( 7 );
+  for( int kind = 0; kind < static_cast<int>(BinningKind::NumKinds); ++kind )
+  {
+    const std::vector<float> energies = make_binning( BinningKind(kind), 301, rng );
+    const std::vector<float> counts = random_counts( 300, rng );
+    std::vector<float> result;
+    SpecUtils::rebin_by_lower_edge( energies, counts, energies, result );
+    
+    // A zero-width channel holds no energy range, so its counts legitimately move to the
+    //  channel containing its energy; only strictly increasing binnings round-trip exactly.
+    bool strictly_increasing = true;
+    for( size_t i = 1; i < energies.size(); ++i )
+      strictly_increasing = strictly_increasing && (energies[i] > energies[i-1]);
+    
+    const std::string label = binning_kind_name( BinningKind(kind) );
+    if( strictly_increasing )
+      CHECK_MESSAGE( result == counts, label );
+    else
+      check_against_reference( energies, counts, energies, label + " identity" );
+  }
+}
+
+
+TEST_CASE( "Coarse lower-edge-only groups onto fine binning (GADRAS scatter style)" )
+{
+  // 32 lower-edge-only groups up to E0, with a tiny last group, onto 1024 lower-edge-only channels
+  //  that end at the last group's lower edge - the setup in which the last group was double counted
+  //  before SpecUtils commit b33522c.
+  const double e0 = 1315.65;
+  std::vector<float> original_energies( 32 ), original_counts( 32 );
+  for( size_t g = 0; g < 32; ++g )
+  {
+    original_energies[g] = static_cast<float>( e0*g/32.0 );
+    original_counts[g] = static_cast<float>( 1.6E15 + 2.0E14*std::cos( 0.3*g ) );
+  }
+  original_counts.back() = 1.27038095e+11f;
+  
+  std::vector<float> new_energies( 1024 );
+  for( size_t i = 0; i < new_energies.size(); ++i )
+    new_energies[i] = static_cast<float>( original_energies.back()*i/1023.0 );
+  
+  check_against_reference( original_energies, original_counts, new_energies, "GADRAS-style" );
+  
+  std::vector<float> result;
+  SpecUtils::rebin_by_lower_edge( original_energies, original_counts, new_energies, result );
+  CHECK( fabs( result.back() - original_counts.back() ) < 1.0E-6*original_counts.back() );
+}
+
+
+TEST_CASE( "Randomized overlap scenarios against reference" )
+{
+  enum Scenario { Inside, Covers, ShiftUp, ShiftDown, Below, Above, EndsInFirst, StartsInLast,
+                  ZeroWidthOld, Coincident, NumScenarios };
+  
+  std::mt19937 rng( 20261013 );
+  std::uniform_int_distribution<size_t> nold_dist( 4, 60 ), nnew_dist( 4, 80 );
+  std::uniform_real_distribution<double> unit( 0.0, 1.0 );
+  
+  for( int scenario = 0; scenario < NumScenarios; ++scenario )
+  {
+    size_t nfail = 0;
+    for( int trial = 0; trial < 200; ++trial )
+    {
+      const size_t nold = nold_dist( rng );
+      const bool has_upper = (unit(rng) < 0.5);
+      const double zero_prob = (scenario == ZeroWidthOld) ? 0.1 : 0.0;
+      const std::vector<float> oe = jittered_edges( nold + (has_upper ? 1 : 0), 100.0, 10.0, zero_prob, rng );
+      const std::vector<float> oc = random_counts( nold, rng );
+      
+      const double lo = oe[0];
+      const double hi = has_upper ? double(oe.back()) : 2.0*oe[nold-1] - oe[nold-2];
+      const double range = hi - lo;
+      
+      std::vector<float> ne;
+      if( scenario == Coincident )
+      {
+        // New edges are a random subset of the original edges
+        for( const float e : oe )
+          if( ne.empty() || ((unit(rng) < 0.4) && (e > ne.back())) )
+            ne.push_back( e );
+        while( ne.size() < (4u + (has_upper ? 1u : 0u)) )
+          ne.push_back( ne.back() + 5.0f );
+      }else
+      {
+        double a = lo, b = hi;
+        switch( scenario )
+        {
+          case Inside:       a = lo + 0.2*range;  b = hi - 0.2*range; break;
+          case Covers:       a = lo - 0.3*range;  b = hi + 0.3*range; break;
+          case ShiftUp:      a = lo + 0.1*range;  b = hi + 0.1*range; break;
+          case ShiftDown:    a = lo - 0.1*range;  b = hi - 0.1*range; break;
+          case Below:        a = lo - 2.0*range;  b = lo - 1.0*range; break;
+          case Above:        a = hi + 1.0*range;  b = hi + 2.0*range; break;
+          case EndsInFirst:  a = lo - range;      b = lo + 0.5*(oe[1] - oe[0]); break;
+          case StartsInLast: a = oe[nold-1] + 0.3*(hi - oe[nold-1]); b = hi + range; break;
+          case ZeroWidthOld: a = lo - 0.1*range;  b = hi + 0.1*range; break;
+          default: break;
+        }//switch( scenario )
+        
+        const size_t nnew = nnew_dist( rng );
+        const size_t nedges = nnew + (has_upper ? 1 : 0);
+        const double step = (b - a) / (has_upper ? nnew : nedges);
+        for( size_t i = 0; i < nedges; ++i )
+          ne.push_back( static_cast<float>( a + step*i ) );
+      }//if( scenario == Coincident ) / else
+      
+      nfail += (check_against_reference( oe, oc, ne, "scenario " + std::to_string(scenario)
+                                        + ", trial " + std::to_string(trial) ) != 0);
+    }//for( loop over trials )
+    
+    CHECK_MESSAGE( nfail == 0, "Scenario " << scenario << " had " << nfail << " failing trials" );
+  }//for( loop over scenarios )
+}
+
+
+TEST_CASE( "Heavily non-uniform binning against reference" )
+{
+  std::mt19937 rng( 8675309 );
+  std::uniform_int_distribution<size_t> nchannel_dist( 4, 300 );
+  std::uniform_real_distribution<double> unit( 0.0, 1.0 );
+  
+  const int nkinds = static_cast<int>( BinningKind::NumKinds );
+  for( int old_kind = 0; old_kind < nkinds; ++old_kind )
+  {
+    for( int new_kind = 0; new_kind < nkinds; ++new_kind )
+    {
+      const std::string label = std::string(binning_kind_name( BinningKind(old_kind) ))
+                                + " -> " + binning_kind_name( BinningKind(new_kind) );
+      size_t nfail = 0;
+      for( int trial = 0; trial < 20; ++trial )
+      {
+        const bool has_upper = (trial % 2) == 0;
+        const size_t nold = nchannel_dist( rng ), nnew = nchannel_dist( rng );
+        const std::vector<float> oe = make_binning( BinningKind(old_kind), nold + (has_upper ? 1 : 0), rng );
+        const std::vector<float> oc = random_counts( nold, rng );
+        
+        // Map the new binning shape onto a range overlapping the original range
+        const std::vector<float> shape = make_binning( BinningKind(new_kind), nnew + (has_upper ? 1 : 0), rng );
+        const double lo = oe.front();
+        const double hi = has_upper ? double(oe.back()) : 2.0*oe[nold-1] - oe[nold-2];
+        const double a = lo + (hi - lo)*(0.6*unit(rng) - 0.3);
+        const double b = hi + (hi - lo)*(0.6*unit(rng) - 0.3);
+        const double scale = (b - a) / (double(shape.back()) - double(shape.front()));
+        std::vector<float> ne( shape.size() );
+        for( size_t i = 0; i < shape.size(); ++i )
+          ne[i] = static_cast<float>( a + (double(shape[i]) - shape.front())*scale );
+        
+        nfail += (check_against_reference( oe, oc, ne, label + ", trial " + std::to_string(trial) ) != 0);
+      }//for( loop over trials )
+      
+      CHECK_MESSAGE( nfail == 0, label << " had " << nfail << " failing trials" );
+    }//for( loop over new binning kinds )
+  }//for( loop over old binning kinds )
+}
+
+
+TEST_CASE( "Rebin between realistic non-linear energy calibrations" )
+{
+  using SpecUtils::EnergyCalibration;
+  
+  // Builds a calibration of the given type; channel energies have num_channels+1 entries.
+  const auto make_cal = []( const int type, const size_t nchannel ) -> std::shared_ptr<EnergyCalibration> {
+    auto cal = std::make_shared<EnergyCalibration>();
+    switch( type )
+    {
+      case 0: // Polynomial with large quadratic term
+        cal->set_polynomial( nchannel, { 0.0f, 0.05f*16384.0f/nchannel, 5.0E-6f*(16384.0f/nchannel)*(16384.0f/nchannel) }, {} );
+        break;
+        
+      case 1: // Full range fraction with non-linear terms
+        cal->set_full_range_fraction( nchannel, { -2.0f, 2900.0f, 120.0f, -40.0f, 3.0f }, {} );
+        break;
+        
+      case 2: // Polynomial with deviation pairs, including a steep local kink
+        cal->set_polynomial( nchannel, { 0.0f, 3000.0f/nchannel }, {
+          {0.0f, 0.0f}, {100.0f, 8.0f}, {120.0f, -6.0f}, {662.0f, -2.0f}, {1460.0f, 5.0f}, {2614.0f, 0.0f} } );
+        break;
+        
+      case 3: // Log-spaced lower channel energies
+      {
+        std::vector<float> energies( nchannel + 1 );
+        const double ratio = std::pow( 400.0, 1.0/nchannel );
+        for( size_t i = 0; i <= nchannel; ++i )
+          energies[i] = static_cast<float>( 8.0*std::pow( ratio, double(i) ) );
+        cal->set_lower_channel_energy( nchannel, std::move(energies) );
+        break;
+      }
+    }//switch( type )
+    return cal;
+  };//make_cal
+  
+  const char * const names[] = { "QuadPoly", "FRF", "PolyDevPairs", "LogLowerEdge" };
+  
+  std::vector<std::shared_ptr<EnergyCalibration>> cals;
+  std::vector<std::string> cal_names;
+  for( const size_t nchannel : { size_t(1024), size_t(16384) } )
+  {
+    for( int type = 0; type < 4; ++type )
+    {
+      REQUIRE_NOTHROW( cals.push_back( make_cal( type, nchannel ) ) );
+      REQUIRE( cals.back()->channel_energies() );
+      REQUIRE( cals.back()->channel_energies()->size() == (nchannel + 1) );
+      cal_names.push_back( std::string(names[type]) + "-" + std::to_string(nchannel) );
+    }
+  }
+  
+  std::mt19937 rng( 31337 );
+  for( size_t from = 0; from < cals.size(); ++from )
+  {
+    const std::vector<float> &from_energies = *cals[from]->channel_energies();
+    const std::vector<float> counts = random_counts( from_energies.size() - 1, rng );
+    
+    for( size_t to = 0; to < cals.size(); ++to )
+    {
+      const std::vector<float> &to_energies = *cals[to]->channel_energies();
+      const std::string label = cal_names[from] + " -> " + cal_names[to];
+      
+      // With upper edges (how callers normally use it) ...
+      check_against_reference( from_energies, counts, to_energies, label );
+      
+      // ... and with lower edges only
+      const std::vector<float> from_lower( begin(from_energies), end(from_energies) - 1 );
+      const std::vector<float> to_lower( begin(to_energies), end(to_energies) - 1 );
+      check_against_reference( from_lower, counts, to_lower, label + " (no upper)" );
+    }
+  }//for( loop over from calibrations )
+}
+
+
+TEST_CASE( "Non-finite edges terminate and conserve counts" )
+{
+  const std::vector<float> counts{ 1, 2, 3, 4, 5, 6 };
+  const float inf = std::numeric_limits<float>::infinity();
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  
+  std::vector<float> result;
+  const std::vector<float> inf_upper{ 0, 1, 2, 3, 4, 5, inf };
+  SpecUtils::rebin_by_lower_edge( inf_upper, counts, { 0, 0.5f, 1, 1.5f, 2, 3, 7 }, result );
+  CHECK( std::accumulate( begin(result), end(result), 0.0 ) == 21.0 );
+  
+  const std::vector<float> finite{ 0, 1, 2, 3, 4, 5, 6 };
+  SpecUtils::rebin_by_lower_edge( finite, counts, { 0, 0.5f, nan, 1.5f, 2, 3, 7 }, result );
+  CHECK( std::accumulate( begin(result), end(result), 0.0 ) == 21.0 );
+}
