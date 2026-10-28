@@ -1013,10 +1013,14 @@ namespace
     //  insert itself into the DOM; this is so this function is safe to call in
     //  its own thread with no error handling.  I expect this to never happen, so
     //  I'm not bothering with any better error handling.
+    //  If `positional_meas_id` is true, the "id" of RadMeasurement is a position in the file
+    //  ("Background", "Survey<index>"), rather than the sample number, so the <Spectrum> and
+    //  <GrossCounts> ids are written with the sample number, since that is where it's read from.
 
 void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char> *RadMeasurement,
                   const std::vector< std::shared_ptr<const SpecUtils::Measurement> > measurements,
                   const std::vector<size_t> calibids,
+                  const bool positional_meas_id,
                   std::mutex &xmldocmutex )
 {
   using namespace SpecUtils;
@@ -1174,14 +1178,16 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
         //  start time or background/foreground status so each sample/detector
         //  gets its own <RadMeasurement> element, with an id like "Sample3Det1"
         snprintf( spec_id_cstr, sizeof(spec_id_cstr), "%sSpectrum", radMeasID.c_str() );
-      }else if( !radMeasID.empty() )
+      }else if( !radMeasID.empty() && !positional_meas_id )
       {
-        //radMeasID will be "Background", "Survey XXX" if passthrough() that
-        //  starts with a long background, and "SampleXXX" otherwise.
+        //radMeasID will be "Survey<sample number>" if passthrough(), and "Sample<sample number>"
+        //  otherwise.
         snprintf( spec_id_cstr, sizeof(spec_id_cstr), "%sDet%iSpectrum", radMeasID.c_str(), m->detector_number() );
       }else
       {
-        //Probably shouldnt ever make it here.
+        //radMeasID is "Background" or "Survey<index>" for passthrough() files that start with a
+        //  long background (or, shouldnt happen, empty); when reading the file back in, the sample
+        //  number is taken from this Spectrum id, so it must be the actual sample number.
         snprintf( spec_id_cstr, sizeof(spec_id_cstr), "Sample%iDet%iSpectrum", m->sample_number(), m->detector_number() );
       }
       spec_id_cstr[sizeof(spec_id_cstr) - 1] = '\0'; //jic
@@ -1445,7 +1451,7 @@ void add_spectra_to_measurement_node_in_2012_N42_xml( ::rapidxml::xml_node<char>
         
         
         char neutId[32];
-        if( radMeasID.empty() )
+        if( radMeasID.empty() || positional_meas_id )
           snprintf( neutId, sizeof(neutId), "Sample%iNeutron%i", m->sample_number(), m->detector_number() );
         else
           snprintf( neutId, sizeof(neutId), "%sNeutron%i", radMeasID.c_str(), m->detector_number() );
@@ -3780,7 +3786,15 @@ public:
           }//if( samp_det_str.size() )
           
   #if(PERFORM_DEVELOPER_CHECKS && !SpecUtils_BUILD_FUZZING_TESTS)
-          if( (sample_num_from_meas_node != -999) && (meas->sample_number_ != sample_num_from_meas_node) )
+          // We write search-mode files that start with a long background with positional
+          //  RadMeasurement ids ("Background", "Survey<index>"), but with the sample numbers in the
+          //  Spectrum ids, so these are expected to disagree.
+          const bool positional_meas_id = (SpecUtils::istarts_with(meas_id_att_str, "Background")
+                                             || SpecUtils::istarts_with(meas_id_att_str, "Survey"))
+                                          && SpecUtils::istarts_with(samp_det_str, "Sample");
+          if( !positional_meas_id
+             && (sample_num_from_meas_node != -999)
+             && (meas->sample_number_ != sample_num_from_meas_node) )
           {
             char buffer[512];
             snprintf( buffer, sizeof(buffer),
@@ -7727,6 +7741,9 @@ namespace SpecUtils
             //Catch the case where its a searchmode file, or a portal file where
             //  the first sample is a long background.  Apparently GADRAS relies
             //  on the "id" attribute of RadMeasurement for this...
+            //  Note that "Survey<i>" then gives the position of the sample in the file, not its
+            //  sample number, so the <Spectrum> and <GrossCounts> ids are written with the sample
+            //  number instead (see add_spectra_to_measurement_node_in_2012_N42_xml).
             if( (sample_num == (*sample_numbers_.begin()))
                && (smeas[0]->source_type() == SourceType::Background)
                && smeas[0]->live_time() > 10.0 )
@@ -7765,8 +7782,10 @@ namespace SpecUtils
             RadMeasurement->append_attribute( attr );
           }
           
-          workerpool.post( [&xmldocmutex,RadMeasurement,smeas,calid](){
-            add_spectra_to_measurement_node_in_2012_N42_xml( RadMeasurement, smeas, calid, xmldocmutex);
+          const bool positional_meas_id = first_sample_was_back;
+          workerpool.post( [&xmldocmutex,RadMeasurement,smeas,calid,positional_meas_id](){
+            add_spectra_to_measurement_node_in_2012_N42_xml( RadMeasurement, smeas, calid,
+                                                             positional_meas_id, xmldocmutex );
           } );
         }else //if( sample_same_times )
         {
@@ -7794,7 +7813,8 @@ namespace SpecUtils
             }
             
             workerpool.post( [RadMeasurement, thismeas, thiscalid, &xmldocmutex](){
-              add_spectra_to_measurement_node_in_2012_N42_xml( RadMeasurement, thismeas, thiscalid, xmldocmutex );
+              add_spectra_to_measurement_node_in_2012_N42_xml( RadMeasurement, thismeas, thiscalid,
+                                                               false, xmldocmutex );
             } );
           }//for( loop over measuremtns for this sample number )
         }//if( sample_same_times ) / else

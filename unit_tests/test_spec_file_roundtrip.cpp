@@ -32,6 +32,7 @@
 #include <vector>
 #include <sstream>
 #include <cmath>
+#include <chrono>
 #include <memory>
 #include <functional>
 #include <iostream>
@@ -532,6 +533,114 @@ TEST_CASE( "Roundtrip passthrough.n42" )
 
   run_roundtrip_for_file( filepath, "passthrough.n42" );
 }
+
+
+/** A SpecFile that keeps the sample numbers in the file, like InterSpec does for files it wrote. */
+class KeepSampleNumbersSpecFile : public SpecFile
+{
+public:
+  virtual void cleanup_after_load( const unsigned int flags = StandardCleanup ) override
+  {
+    SpecFile::cleanup_after_load( flags | SpecFile::DontChangeOrReorderSamples );
+  }
+};//class KeepSampleNumbersSpecFile
+
+
+TEST_CASE( "N42-2012 search-mode with leading background keeps sample numbers" )
+{
+  // Search-mode data whose first sample is a long background is written with positional
+  //  <RadMeasurement> ids ("Background", "Survey<index>"), which GADRAS relies on; the
+  //  <Spectrum> and <GrossCounts> ids, which the sample numbers are read from, must still give the
+  //  real sample numbers.
+  for( const int first_sample : {1, 5} )
+  {
+    CAPTURE( first_sample );
+
+    auto cal = make_shared<EnergyCalibration>();
+    cal->set_polynomial( 64, {0.0f, 3.0f}, {} );
+
+    SpecFile spec;
+    for( int index = 0; index < 11; ++index )
+    {
+      const float real_time = index ? 4.0f : 300.0f;
+      auto m = make_shared<Measurement>();
+      m->set_gamma_counts( make_shared<vector<float>>( 64, static_cast<float>(index + 1) ), 0.98f*real_time, real_time );
+      m->set_neutron_counts( { static_cast<float>(index + 2) }, 0.98f*real_time );
+      m->set_energy_calibration( cal );
+      m->set_sample_number( first_sample + index );
+      m->set_detector_name( "Aa1" );
+      m->set_source_type( index ? SourceType::Foreground : SourceType::Background );
+      m->set_start_time( SpecUtils::time_from_string( "2026-10-21T12:00:00" )
+                         + chrono::seconds( index ? (296 + 4*index) : 0 ) );
+      spec.add_measurement( m, false );
+    }//for( loop over samples )
+    spec.cleanup_after_load( SpecFile::DontChangeOrReorderSamples );
+    REQUIRE( spec.passthrough() );
+
+    stringstream strm;
+    REQUIRE( spec.write_2012_N42( strm ) );
+    const string xml = strm.str();
+
+    // The RadMeasurement ids are positional; the Spectrum and GrossCounts ids have the sample number.
+    CHECK( xml.find( "<RadMeasurement id=\"Background\"" ) != string::npos );
+    for( int index = 0; index < 11; ++index )
+    {
+      const string sample = std::to_string( first_sample + index );
+      if( index )
+        CHECK( xml.find( "<RadMeasurement id=\"Survey" + std::to_string(index) + "\"" ) != string::npos );
+      CHECK( xml.find( "id=\"Sample" + sample + "Det0Spectrum\"" ) != string::npos );
+      CHECK( xml.find( "id=\"Sample" + sample + "Neutron" ) != string::npos );
+    }
+    CHECK( xml.find( "id=\"Survey1Det0Spectrum\"" ) == string::npos );
+
+    // Keeping the file's sample numbers gives back the original numbers, with the same data.
+    KeepSampleNumbersSpecFile kept;
+    {
+      istringstream input( xml );
+      REQUIRE( kept.load_from_N42( input ) );
+    }
+    CHECK( kept.sample_numbers() == spec.sample_numbers() );
+
+    // The standard cleanup numbers from 1, as it did before the Spectrum ids changed.
+    SpecFile standard;
+    {
+      istringstream input( xml );
+      REQUIRE( standard.load_from_N42( input ) );
+    }
+    REQUIRE( standard.sample_numbers().size() == 11 );
+    CHECK( *standard.sample_numbers().begin() == 1 );
+    CHECK( *standard.sample_numbers().rbegin() == 11 );
+
+    for( int index = 0; index < 11; ++index )
+    {
+      CAPTURE( index );
+      const int orig_sample = first_sample + index;
+      const vector<shared_ptr<const Measurement>> orig = spec.sample_measurements( orig_sample );
+      const vector<shared_ptr<const Measurement>> kept_meas = kept.sample_measurements( orig_sample );
+      const vector<shared_ptr<const Measurement>> std_meas = standard.sample_measurements( index + 1 );
+      REQUIRE( orig.size() == 1 );
+      REQUIRE( !kept_meas.empty() );
+      REQUIRE( !std_meas.empty() );
+
+      double kept_gamma = 0.0, kept_neut = 0.0, std_gamma = 0.0, std_neut = 0.0;
+      for( const auto &m : kept_meas )
+      {
+        kept_gamma += m->gamma_count_sum();
+        kept_neut += m->neutron_counts_sum();
+      }
+      for( const auto &m : std_meas )
+      {
+        std_gamma += m->gamma_count_sum();
+        std_neut += m->neutron_counts_sum();
+      }
+
+      CHECK( kept_gamma == doctest::Approx( orig[0]->gamma_count_sum() ) );
+      CHECK( kept_neut == doctest::Approx( orig[0]->neutron_counts_sum() ) );
+      CHECK( std_gamma == doctest::Approx( orig[0]->gamma_count_sum() ) );
+      CHECK( std_neut == doctest::Approx( orig[0]->neutron_counts_sum() ) );
+    }//for( loop over samples )
+  }//for( const int first_sample : {1, 5} )
+}//TEST_CASE( "N42-2012 search-mode with leading background keeps sample numbers" )
 
 
 TEST_CASE( "IEC declarations are bounded and match retained channel data" )
