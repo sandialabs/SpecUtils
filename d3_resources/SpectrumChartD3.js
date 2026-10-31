@@ -7056,12 +7056,15 @@ SpectrumChartD3.prototype.offset_integral = function(roi,x0,x1){
     let bisector = self._bisecRaw;
     let cstartind = bisector.left( energies, Math.max(roi.lowerEnergy,x0) );
     let cendind = bisector.right( energies, Math.min(roi.upperEnergy,x1) );
-    
-    if( cstartind >= (energies.length-1) )
+
+    // Last channel with a known upper energy (`energies` should have one more entry than `counts`)
+    const lastchan = Math.min( energies.length - 2, counts.length - 1 );
+
+    if( cstartind > lastchan )
       return 0.0;  //shouldnt ever happen
-      
-    if( cendind >= (energies.length-1) )
-      cendind = energies.length - 1;
+
+    if( cendind > lastchan )
+      cendind = lastchan;
 
     if( cstartind > 0 && energies[cstartind] > x0 )
       cstartind = cstartind - 1;
