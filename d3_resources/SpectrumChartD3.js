@@ -1784,9 +1784,11 @@ SpectrumChartD3.prototype._cancelOtherMouseModes = function( activeName ){
 /** -------------- Chart Event Handlers (outer chart element) -------------- */
 SpectrumChartD3.prototype.handleChartMouseMove = function() {
   var self = this;
+  const mousemove = self.mousemove(), sliderMove = self.handleMouseMoveSliderChart(),
+        scaleFactorMove = self.handleMouseMoveScaleFactorSlider();
 
   return function() {
-    self.mousemove()();
+    mousemove();
 
     if( !self.hasSpectrumData()
         || self.xaxisdown || !isNaN(self.yaxisdown) || self.legdown ){
@@ -1800,8 +1802,8 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
     self.lastMouseMovePos = m;
     m[1] = Math.min( Math.max( m[1], 0 ), self.size.height );
 
-    self.handleMouseMoveSliderChart()();
-    self.handleMouseMoveScaleFactorSlider()();
+    sliderMove();
+    scaleFactorMove();
 
     // Moving the mouse removes the grey lines showing where the screen was touched
     self.deleteTouchLine();
@@ -1826,9 +1828,10 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
 
       return;
     } else if ( self.rightClickDown ){
-      // Right-click drag pans the chart
+      // Right-click drag pans the chart (mousemove() above updated the feature markers for the old range)
       self.handleCancelRoiDrag();
       self.handlePanChart();
+      self.updateFeatureMarkers(-1);
     } else if( x >= 0 && y >= 0 && y <= self.size.height && x <= self.size.width
                && !d3.event.altKey && !d3.event.ctrlKey && !d3.event.metaKey
                && !d3.event.shiftKey && (self.leftDragMode !== 'fitPeak') && !self.escapeKeyPressed ) {
@@ -1856,8 +1859,6 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
         }
       }//if( self.roiDragBoxes && self.showDragLineWhileInRoi ) / else
     }//if / else {what to do}
-      
-    self.updateFeatureMarkers(-1);
   }
 }
 
@@ -2880,6 +2881,7 @@ SpectrumChartD3.prototype.handleVisTouchStart = function() {
 
 SpectrumChartD3.prototype.handleVisTouchMove = function() {
   var self = this;
+  const mousemove = self.mousemove();
 
   return function() {
     SpectrumChartD3.stopEvent();
@@ -2924,7 +2926,7 @@ SpectrumChartD3.prototype.handleVisTouchMove = function() {
       if( self.roiDragBoxes )
         self.handleCancelRoiDrag();
       
-      self.mousemove()();
+      mousemove();
       self.handlePanChart();
 
       self.updateMouseCoordText();
