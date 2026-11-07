@@ -125,7 +125,7 @@ SpectrumChartD3 = function(elem, options) {
   ]);
   
   // Special handling for showAnimation which depends on animationDuration
-  this.options.showAnimation = (typeof options.showAnimation == 'boolean' && this.options.animationDuration > 0) ? options.showAnimation : false;
+  this.options.showAnimation = (typeof this.options.showAnimation == 'boolean' && this.options.animationDuration > 0) ? this.options.showAnimation : false;
 
   // Hard-coded / fixed option values (not user-configurable, so no validation needed).
   Object.assign( this.options, {
@@ -681,6 +681,7 @@ SpectrumChartD3 = function(elem, options) {
       self.lastKineticTapPos = null;
       self.stopKineticRefLineCycling();
       self.drawRefGammaLines();
+      self.updateKineticRefLineCandidateDisplay();
     }
   });
   
@@ -1021,6 +1022,8 @@ SpectrumChartD3.prototype.setLocalizations = function( input, isInitialDef ) {
     sumFromTo: "{1} to {2} keV",
     comptonPeakAngle: "{1}° Compton Peak",
     templateDefaultTitle: "Template",
+    candidates: "Candidates:",
+    useArrowsToSelect: "(use ↑ and ↓ to select)",
   };
 
   const notDefined = ( (typeof self.options.txt !== 'object') || (self.options.txt === null) || Array.isArray(self.options.txt) || (self.options.txt instanceof Function) );
@@ -1079,7 +1082,7 @@ SpectrumChartD3.prototype.setSpectrumData = function( spectrumData, resetdomain,
   spectrumData = spectrumData.spectra[0];
 
   if (typeof id !== 'undefined') spectrumData.id = id;
-  if( spectrumData.id === 'undefined' || spectrumData.id === null ) spectrumData.id = Math.random();
+  if( (typeof spectrumData.id === 'undefined') || (spectrumData.id === null) ) spectrumData.id = Math.random();
 
   if (backgroundID) spectrumData.backgroundID = backgroundID;
 
@@ -1460,6 +1463,7 @@ SpectrumChartD3.prototype.setXAxisTitle = function(title, dontResize) {
 
   self.options.txt.xAxisTitle = null;
   self.svg.select('.xaxistitle').remove();
+  self.xaxistitle = null;
 
   if( (title == null || typeof title !== 'string') || title.length === 0 )
     return;
@@ -2530,11 +2534,12 @@ SpectrumChartD3.prototype.handleChartMouseLeave = function() {
       if (!d3.event)
         return;
 
-      if( !d3.select(d3.event.toElement)[0].parentNode
-          || d3.event.toElement === document.body
-          || d3.event.toElement.nodeName === "HTML"
-          || d3.event.toElement.nodeName === "DIV"
-          || d3.event.toElement.offsetParent === document.body) {
+      const to = d3.event.relatedTarget;
+      if( !d3.select(to)[0].parentNode
+          || to === document.body
+          || to.nodeName === "HTML"
+          || to.nodeName === "DIV"
+          || to.offsetParent === document.body) {
         self._cancelOtherMouseModes( null );   /* null -> every mode */
         self.handleCancelRoiDrag();
         self._resetTransientPointerState();
@@ -3746,7 +3751,7 @@ SpectrumChartD3.prototype.drawSearchRanges = function() {
     .style("fill", 'rgba(255, 204, 204, 0.4)')
      ;
      
-  var stroke = function(d) { return d.energy>=lx && d.energy<=ux ? '#4C4C4C' : 'rgba(0,0,0,0);'; };
+  var stroke = function(d) { return d.energy>=lx && d.energy<=ux ? '#4C4C4C' : 'rgba(0,0,0,0)'; };
 
   gye.append("line")
     .attr("y1", h )
@@ -3884,7 +3889,7 @@ SpectrumChartD3.prototype.drawHighlightRegions = function(){
 SpectrumChartD3.prototype.drawRefGammaLines = function() {
   const self = this;
 
-  if( (!self.refLines || !self.refLines.length || !self.refLines[0].lines  || !self.refLines[0].lines.length)
+  if( (!self.refLines || !self.refLines.some( function(r){ return r.lines && r.lines.length; } ))
       && (!self.currentKineticRefLine || !self.currentKineticRefLine.lines || !self.currentKineticRefLine.lines.length ) ) {
     self.vis.selectAll("g.ref").remove();
     return;
@@ -7206,23 +7211,23 @@ SpectrumChartD3.prototype._peaksDrawnFor = function( spectrum ){
 
 SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
   const self = this;
-  
+
+  // Label positions are adjusted after a short idle (the timeout at the bottom of this function)
+  window.clearTimeout( self.adjustLabelTimeout );
+  self.adjustLabelTimeout = null;
+
   if( !labelinfos || !labelinfos.length )
     return;
-  
+
   if( !self.options.showUserLabels && !self.options.showPeakLabels && !self.options.showNuclideNames )
     return;
-  
+
   const chart = self.peakVis;
   const chartBox = self.plot.node().getBBox();
 
   // Chart not set up yet
   if( !chartBox.width || !chartBox.height )
     return;
-
-  // Label positions are adjusted after a short idle (the timeout at the bottom of this function)
-  window.clearTimeout( self.adjustLabelTimeout );
-  self.adjustLabelTimeout = null;
 
   // labelinfos: [{roi, peak, energy, userLabel, centroidXPx, centroidMinYPx, centroidMaxYPx}] (see roiGeometry)
   const fontSize = self.options.peakLabelSize;
@@ -9061,7 +9066,7 @@ SpectrumChartD3.prototype._drawDeletePeakBox = function( boxX, boxWidth, centerL
 
   text.text( (blankWhenEmpty && !(boxWidth > 0)) ? "" : self.options.txt.eraseInRange );
 
-  const labelOffset = centerLabel ? (Number(text[0][0].clientWidth)/2) : 40;
+  const labelOffset = centerLabel ? (0.5*text.node().getBoundingClientRect().width) : 40;
   text.attr("x", Number(box.attr("x")) + (Number(box.attr("width"))/2) - labelOffset );
 };
 
@@ -9379,7 +9384,7 @@ SpectrumChartD3.prototype.handleMouseOutPeak = function(peakElem, highlightedPea
     return false;
   }
   
-  if (this.peakInfo && isElementDescendantOf(this.peakInfo.node(), d3.event.toElement)) {
+  if (this.peakInfo && isElementDescendantOf(this.peakInfo.node(), d3.event.relatedTarget)) {
     return this.handleMouseMovePeak()();
   }
 
@@ -9600,7 +9605,7 @@ SpectrumChartD3.prototype.displayPeakInfo = function(info, clientX) {
   createPeakInfoText(text, self.options.txt.mean, info.mean + " keV");
   
   if (areMultipleSpectrumPeaksShown)
-    createPeakInfoText(text, self.options.txt.spectrum, self.rawData.spectra[info.spectrumIndex].title);
+    createPeakInfoText(text, self.options.txt.spectrum, self.rawData.spectra[info.spectrumIndex].title || ("Spectrum " + (info.spectrumIndex + 1)));
     
   const width = text.node().getBoundingClientRect().width + 10; // + 10 for right padding
   rect.attr('width', width);
