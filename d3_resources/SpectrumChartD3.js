@@ -1012,7 +1012,9 @@ SpectrumChartD3.prototype.setSpectrumData = function( spectrumData, resetdomain,
   spectrumData = spectrumData.spectra[0];
 
   if (typeof id !== 'undefined') spectrumData.id = id;
-  if( (typeof spectrumData.id === 'undefined') || (spectrumData.id === null) ) spectrumData.id = Math.random();
+  // No id: one past the largest numeric id in use (ids become parts of element ids, so must be selector-safe)
+  if( (typeof spectrumData.id === 'undefined') || (spectrumData.id === null) )
+    spectrumData.id = 1 + spectra.reduce( (mx, s) => ((typeof s.id === 'number') && (s.id > mx)) ? s.id : mx, -1 );
 
   if (backgroundID) spectrumData.backgroundID = backgroundID;
 
