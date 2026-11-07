@@ -129,6 +129,7 @@ test.describe('cleanup-pass fixes', () => {
     expect( ev, 'xrangechanged emitted' ).not.toBeNull();
     expect( Math.abs( ev.args[0] - dom[0] ) ).toBeLessThan( 1e-6 );
     expect( Math.abs( ev.args[1] - dom[1] ) ).toBeLessThan( 1e-6 );
+    expect( ev.args[4], 'user_action, as for a release inside the plot' ).toBe( false );
   });
 
   test('peak info ignores background peaks hidden by background subtraction', async ({ chart, page }) => {
@@ -227,6 +228,44 @@ test.describe('cleanup-pass fixes', () => {
     expect( Math.abs( ev.args[0] - dom[0] ) ).toBeLessThan( 1e-6 );
     expect( Math.abs( ev.args[1] - dom[1] ) ).toBeLessThan( 1e-6 );
     expect( Math.abs( dom[1] - dom[0] - 300 ) ).toBeLessThan( 15 );
+    expect( await chart.errors() ).toEqual( [] );
+  });
+  test('feature markers follow a slider-chart drag that ends over the plot', async ({ chart, page }) => {
+    await page.evaluate( () => { const g = window.graph; g.setShowXAxisSliderChart( true ); g.setXAxisRange( 200, 500 ); g.redraw()(); g.setComptonEdge( true ); } );
+    const box = await chart.boxRect( '#chart1 .sliderBox' ), vis = await chart.boxRect( '#chart1 .chartarea' );
+    const bx = box.x + 0.5*box.width, by = box.y + 0.5*box.height;
+    await page.mouse.move( bx, by );
+    await page.mouse.down();
+    await page.mouse.move( bx + 2, by );
+    await page.mouse.move( bx + 60, vis.y + 0.5*vis.height );   // the box moves right; the cursor is over the plot
+    const r = await page.evaluate( (cx) => [ parseFloat( window.graph.mouseEdgeText.text() ), window.clientToEnergy( cx ) ], bx + 60 );
+    await page.mouse.up();
+    expect( Math.abs( r[0] - r[1] ), 'cursor marker labelled for the current x-range' ).toBeLessThan( 1 );
+  });
+
+  test('count-gammas text lines stay together when the chart is resized mid-drag', async ({ chart, page }) => {
+    await page.evaluate( () => window.graph.rawData.spectra.forEach( (s) => { if( s.type !== 'FOREGROUND' ) s.yScaleFactor = 2.0; } ) );
+    const ys = () => page.evaluate( () => Object.fromEntries( Array.from( document.querySelectorAll('#chart1 .countGammasText') )
+                                                  .map( (n) => [n.id, +n.getAttribute('y')] ) ) );
+    await page.keyboard.down( 'Alt' ); await page.keyboard.down( 'Shift' );
+    await chart._down( 300, { yFrac: 0.5 } );
+    await chart._moveTo( 500, { yFrac: 0.5, steps: 4 } );
+    const before = await ys();
+    await page.evaluate( () => { document.getElementById('chart1').style.height = '250px'; window.graph.handleResize(); } );
+    await chart._moveTo( 520, { yFrac: 0.5, steps: 2 } );
+    const after = await ys();
+    await page.mouse.up();
+    await page.keyboard.up( 'Shift' ); await page.keyboard.up( 'Alt' );
+    expect( Object.keys( before ).some( (k) => k.startsWith( 'asterickText' ) ) ).toBe( true );
+    expect( after ).toEqual( before );
+  });
+  test('a spectrum added without an id or type breaks neither count-gammas nor clicks', async ({ chart, page }) => {
+    await page.evaluate( () => { const s0 = window.graph.rawData.spectra[0];
+                                 window.graph.setSpectrumData( { spectra: [ { x: s0.x, y: s0.y, title: 'NoIdNoType' } ] }, false, 'SECONDARY' ); } );
+    await chart.mouseDrag( 300, 500, { modifiers: ['Alt', 'Shift'] } );
+    expect( (await chart.emits( 'shiftaltkeydragged' )).length ).toBe( 1 );
+    await chart.click( 661 );
+    expect( (await chart.emits( 'leftclicked' )).length ).toBe( 1 );
     expect( await chart.errors() ).toEqual( [] );
   });
 });
