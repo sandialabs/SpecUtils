@@ -5477,8 +5477,14 @@ SpectrumChartD3.prototype.numYScalers = function() {
   if( !this.options.scaleBackgroundSecondary || !this.rawData || !this.rawData.spectra )
     return 0;
 
-  return this.rawData.spectra.filter( (spectrum) => spectrum && spectrum.type && (spectrum.type !== this.spectrumTypes.FOREGROUND)
-                                                    && (spectrum.yScaleFactor != null) && (spectrum.yScaleFactor >= 0.0) ).length;
+  return this.rawData.spectra.filter( (spectrum, i) => this._hasYScaler(spectrum, i) ).length;
+}
+
+/* Whether spectra[i] gets a y-scale slider: a non-foreground spectrum with a scale factor, and a type (the
+   slider identifies its spectrum by type); never spectra[0]. */
+SpectrumChartD3.prototype._hasYScaler = function( spectrum, i ) {
+  return (i > 0) && !!spectrum && !!spectrum.type && (spectrum.type !== this.spectrumTypes.FOREGROUND)
+         && (spectrum.yScaleFactor != null) && (spectrum.yScaleFactor >= 0.0);
 }
 
 /* Returns the spectrum currently being y-scaled by the scaler slider, or null. */
@@ -5558,10 +5564,7 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
     var spectrumScaleFactor = spectrum.yScaleFactor;
     var spectrumSelector = 'Spectrum-' + spectrum.id;
 
-    if (i == 0 || spectrum.type === self.spectrumTypes.FOREGROUND)   // the foreground isn't scalable
-    return;
-      
-    if (spectrumScaleFactor != null && spectrumScaleFactor >= 0) {
+    if (self._hasYScaler(spectrum, i)) {
       scalenum += 1;
       
       const speccolor = spectrum.lineColor; // if null, CSS variables are used
