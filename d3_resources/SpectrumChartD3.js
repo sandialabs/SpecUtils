@@ -8527,9 +8527,8 @@ SpectrumChartD3.prototype.handleMouseMoveZoomY = function () {
       .attr("y", self.zoomInYMouse[1])
       .attr("pointer-events", "none");
   } else {
-    if (height >= 0)  zoomInYBox.attr("height", height);
-    else              zoomInYBox.attr("y", self.lastMouseMovePos[1])
-                        .attr("height", Math.abs(height));
+    zoomInYBox.attr("y", Math.min(self.zoomInYMouse[1], self.lastMouseMovePos[1]))
+      .attr("height", Math.abs(height));
   }
 
   if (Math.abs(self.lastMouseMovePos[1] - self.zoomInYMouse[1]) > 10) {   // text once the box is tall enough to zoom
