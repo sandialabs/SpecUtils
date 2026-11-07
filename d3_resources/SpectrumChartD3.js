@@ -732,7 +732,8 @@ SpectrumChartD3.prototype.deleteAndNullifyElements = function(...names) {
 };
 
 SpectrumChartD3.prototype.deleteTouchLine = function() {
-  this.deleteAndNullifyElements( 'touchLineX', 'touchLineY' );
+  if( this.touchLineX || this.touchLineY )
+    this.deleteAndNullifyElements( 'touchLineX', 'touchLineY' );
 };
 
 SpectrumChartD3.prototype.getStaticSvg = function(){
