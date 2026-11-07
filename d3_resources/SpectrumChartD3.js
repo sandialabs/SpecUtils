@@ -5417,21 +5417,23 @@ SpectrumChartD3.prototype.handleMouseMoveSliderChart = function() {
   };
 }
 
-/* A single touch within `tol` px of an edge of the slider box grabs that edge's handle.
-   (TODO: TouchEvents have no pageX, so this never matches; it'd need changedTouches[0].clientX.) */
+/* A single touch within `tol` px of an edge of the slider box grabs that edge's handle (the handles are too
+   narrow to hit with a finger); inside the box only its outer quarters do, so a narrow box stays draggable. */
 SpectrumChartD3.prototype._sliderTouchPickHandle = function( tol ){
-  const x = d3.event.pageX;
-  const box = this.sliderBox[0][0].getBoundingClientRect();
-  if (d3.event.changedTouches.length !== 1)
+  const touches = d3.event.changedTouches;
+  if (!touches || touches.length !== 1 || !this.sliderBox)   // (no box once the slider's close button hid it)
     return;
 
-  if (box.left - tol <= x && x <= box.left + tol) {
-    this.sliderBoxDown = false;
-    this.leftDragRegionDown = true;
-  } else if (box.right - tol <= x && x <= box.right + tol) {
-    this.sliderBoxDown = false;
-    this.rightDragRegionDown = true;
-  }
+  const x = touches[0].clientX, box = this.sliderBox[0][0].getBoundingClientRect();
+  if (x > box.left && x < box.right)
+    tol = Math.min(tol, 0.25*box.width);
+  const dl = Math.abs(x - box.left), dr = Math.abs(x - box.right);
+  if (Math.min(dl, dr) > tol)
+    return;
+
+  this.sliderBoxDown = false;
+  this.leftDragRegionDown = (dl <= dr);
+  this.rightDragRegionDown = !this.leftDragRegionDown;
 };
 
 SpectrumChartD3.prototype.handleTouchStartSliderBox = function() {
