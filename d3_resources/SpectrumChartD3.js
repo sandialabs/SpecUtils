@@ -3321,14 +3321,14 @@ SpectrumChartD3.prototype._resetTransientPointerState = function() {
   this.legdown = null;
 };
 
-/* Ends an x-axis label drag released outside the plot area, emitting the new range (handleVisMouseUp
-   does this for releases inside it). */
+/* Ends an x-axis label drag released outside the plot area, emitting the new range as handleVisMouseUp
+   does for releases inside it (user_action false). */
 SpectrumChartD3.prototype._endXAxisDrag = function(){
   if( !this.xaxisdown )
     return;
   this.xaxisdown = null;
   const d = this.xScale.domain();
-  this.WtEmit( this.chart.id, {name: 'xrangechanged'}, d[0], d[1], this.size.width, this.size.height, true );
+  this.WtEmit( this.chart.id, {name: 'xrangechanged'}, d[0], d[1], this.size.width, this.size.height, false );
 };
 
 SpectrumChartD3.prototype.handleCancelAllMouseEvents = function() {
