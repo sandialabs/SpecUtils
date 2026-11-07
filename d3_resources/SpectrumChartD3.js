@@ -7062,17 +7062,6 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy ) {
   }catch (e) {
   }
 
-  function removeMouseEdgeFromChart(){
-    if ( self.mouseEdge ) {
-      self.mouseEdge.remove();
-      self.mouseEdge = null;
-    }
-    if ( self.mouseEdgeText ) {
-      self.mouseEdgeText.remove();
-      self.mouseEdgeText = null;
-    }
-  };
-  
   /* Deletes a feature-marker's line + measurement label (+ optional text) by id prefix. */
   function deleteMarker( prefix, hasText ) {
     self.deleteAndNullifyElements( prefix, prefix + 'Meas' );
@@ -7080,195 +7069,63 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy ) {
       self.deleteAndNullifyElements( prefix + 'Text' );
   }
 
-  const escapeMarkerSuffix = { single: 'singleEscape', double: 'doubleEscape',
-                               singleForward: 'singleEscapeForward', doubleForward: 'doubleEscapeForward' };
-  function deleteEscapePeakMarker( peakType ) {
-    if( escapeMarkerSuffix[peakType] )
-      deleteMarker( escapeMarkerSuffix[peakType], true );
-  }
+  function removeHelpText(){ self.deleteAndNullifyElements( 'sumPeakHelpText' ); }
 
-  function deleteComptonPeakLine(){ deleteMarker( 'comptonPeak', true ); }
-  function deleteClickedSumPeakMarker(){ deleteMarker( 'clickedSumPeak', false ); }
-  function deleteSumPeakMarker(){ deleteMarker( 'sumPeak', true ); }
-  function deleteLeftSumPeakMarker(){ deleteMarker( 'leftSumPeak', true ); }
-  
+  // The escape-peak markers: [key, offset from the cursor energy, label, line class, sets a stroke width]
+  const escapes = [ ['singleEscapeForward', 510.99891, self.options.txt.singleEscape, 'escapeLineForward', false],
+                    ['doubleEscapeForward', 1021.99782, self.options.txt.doubleEscape, 'escapeLineForward', false],
+                    ['singleEscape', -510.99891, self.options.txt.singleEscape, 'peakLine', false],
+                    ['doubleEscape', -1021.99782, self.options.txt.doubleEscape, 'peakLine', true] ];
+
   if( !m )
   {
-    removeMouseEdgeFromChart();
-    deleteEscapePeakMarker('single');
-    deleteEscapePeakMarker('double');
-    deleteEscapePeakMarker('singleForward');
-    deleteEscapePeakMarker('doubleForward');
-    deleteComptonPeakLine();
+    self.deleteAndNullifyElements( 'mouseEdge', 'mouseEdgeText' );
+    escapes.forEach( function(esc){ deleteMarker( esc[0], true ); } );
+    deleteMarker( 'comptonPeak', true );
     deleteMarker( 'comptonEdge', true );
-    deleteClickedSumPeakMarker();
-    deleteSumPeakMarker();
-    deleteLeftSumPeakMarker();
-    if( self.sumPeakHelpText ){
-      self.sumPeakHelpText.remove();
-      self.sumPeakHelpText = null;
-    }
+    deleteMarker( 'clickedSumPeak', false );
+    deleteMarker( 'sumPeak', true );
+    deleteMarker( 'leftSumPeak', true );
+    removeHelpText();
     return;
   }//if( !m )
 
   const energy = self.xScale.invert(m[0]),
       xmax = self.size.width,
       ymax = self.size.height;
-      
+
   if( self.legdown || isNaN(energy) || self.currentlyAdjustingSpectrumScale )
     return;
 
   const cursorIsOutOfBounds = (m[0] < 0  || m[0] > xmax || m[1] < 0 || m[1] > ymax);
+  const outOfBounds = (px) => (px < 0) || (px > xmax);
 
   let linehspace = 13;  // spacing between lines of text
 
-  // The mouse edge is removed when all feature options are off, the cursor is out of bounds, or dragging
-  function shouldDeleteMouseEdge() {
-    return (!self.options.showComptonEdge && !self.options.showComptonPeaks && !self.options.showEscapePeaks && !self.options.showSumPeaks) || 
-    cursorIsOutOfBounds || 
-    self.dragging_plot;
-  }
-  function deleteMouseEdge( shouldDelete ) {
-    if ( shouldDelete || shouldDeleteMouseEdge() )
-    {
-      removeMouseEdgeFromChart();
-      return true;
-    }
-    return false;
-  }
-  
+  // The line at the cursor, shown when any feature marker is on, the cursor is in bounds, and not dragging
   function updateMouseEdge() {
-    if (deleteMouseEdge())
-      return;
-    if ( self.mouseEdge ) {
-        self.mouseEdge
-          .attr("x1", m[0])
-          .attr("x2", m[0])
-          .attr("y2", self.size.height);
-        self.mouseEdgeText
-          .attr( "y", self.size.height/4)
-          .attr( "x", m[0] + xmax/125 )
-          .text( energy.toFixed(1) + " keV");
-    } else {
-        self.mouseEdge = self.vis.append("line")
-          .attr("class", "mouseLine")
-          .attr("stroke-width", 2)
-          .attr("x1", m[0])
-          .attr("x2", m[0])
-          .attr("y1", 0)
-          .attr("y2", self.size.height);
-
-        self.mouseEdgeText = self.vis.append("text")
-          .attr("class", "mouseLineText")
-          .attr( "x", m[0] + xmax/125 )
-          .attr( "y", self.size.height/4)
-          .text( energy.toFixed(1) + " keV");
-    }
-  }
-
-  function updateEscapePeaks() {
-    const singleEscapeEnergy = energy - 510.99891,
-        singleEscapePix = self.xScale(singleEscapeEnergy),
-        singleEscapeForwardEnergy = energy + 510.99891,
-        singleEscapeForwardPix = self.xScale(singleEscapeForwardEnergy),
-        doubleEscapeEnergy = energy - 1021.99782,
-        doubleEscapePix = self.xScale(doubleEscapeEnergy),
-        doubleEscapeForwardEnergy = energy + 1021.99782,
-        doubleEscapeForwardPix = self.xScale(doubleEscapeForwardEnergy);
-
-    if (shouldDeleteMouseEdge())
-      deleteMouseEdge(true);
-
-    if( !self.options.showEscapePeaks || cursorIsOutOfBounds || self.dragging_plot ) {
-      deleteEscapePeakMarker('single');
-      deleteEscapePeakMarker('double');
-      deleteEscapePeakMarker('singleForward');
-      deleteEscapePeakMarker('doubleForward');
+    if( (!self.options.showComptonEdge && !self.options.showComptonPeaks && !self.options.showEscapePeaks && !self.options.showSumPeaks)
+        || cursorIsOutOfBounds || self.dragging_plot ){
+      self.deleteAndNullifyElements( 'mouseEdge', 'mouseEdgeText' );
       return;
     }
 
-    var singleEscapeOutOfBounds = singleEscapePix < 0 || singleEscapePix > xmax,
-        doubleEscapeOutOfBounds = doubleEscapePix < 0 || doubleEscapePix > xmax,
-        singleEscapeForwardOutOfBounds = singleEscapeForwardPix < 0 || singleEscapeForwardPix > xmax,
-        doubleEscapeForwardOutOfBounds = doubleEscapeForwardPix < 0 || doubleEscapeForwardPix > xmax;
-
-    if ( doubleEscapeOutOfBounds ) {
-      deleteEscapePeakMarker('double');
-      if ( singleEscapeOutOfBounds )
-        deleteEscapePeakMarker('single');
+    if ( !self.mouseEdge ) {
+      self.mouseEdge = self.vis.append("line")
+        .attr("class", "mouseLine")
+        .attr("stroke-width", 2)
+        .attr("y1", 0);
+      self.mouseEdgeText = self.vis.append("text")
+        .attr("class", "mouseLineText");
     }
-
-    if ( doubleEscapeForwardOutOfBounds ) {
-      deleteEscapePeakMarker('doubleForward');
-      if ( singleEscapeForwardOutOfBounds )
-        deleteEscapePeakMarker('singleForward');
-    }
-
-    updateMouseEdge();
-
-    /* Creates or updates one of the four escape-peak markers: a vertical line plus name and keV labels,
-       stored on `self` as `<keyPrefix>`, `<keyPrefix>Text`, `<keyPrefix>Meas`.  `strokeWidth` (optional)
-       is only set on creation. */
-    function createOrUpdateEscape(keyPrefix, energyVal, pix, label, lineClass, strokeWidth) {
-      var textKey = keyPrefix + 'Text';
-      var measKey = keyPrefix + 'Meas';
-
-      if (!self[keyPrefix] && energyVal >= 0) {
-        self[keyPrefix] = self.vis.append("line")
-          .attr("class", lineClass);
-        if (strokeWidth !== undefined && strokeWidth !== null)
-          self[keyPrefix].attr("stroke-width", strokeWidth);
-        self[keyPrefix]
-          .attr("x1", pix)
-          .attr("x2", pix)
-          .attr("y1", 0)
-          .attr("y2", self.size.height);
-        self[textKey] = self.vis.append("text")
-          .attr("class", "peakText")
-          .attr( "x", pix + xmax/200 )
-          .attr( "y", self.size.height/5.3)
-          .text( label );
-        self[measKey] = self.vis.append("text")
-          .attr("class", "peakText")
-          .attr( "x", pix + xmax/125 )
-          .attr( "y", self.size.height/5.3 + linehspace)
-          .text( energyVal.toFixed(1) + " keV" );
-      } else if (energyVal < 0 && self[keyPrefix] && self[textKey] && self[measKey]) {
-        self.deleteAndNullifyElements( keyPrefix, textKey, measKey );
-      } else if (self[keyPrefix]) {
-        self[keyPrefix]
-          .attr("y2", self.size.height)
-          .attr("x1", pix)
-          .attr("x2", pix);
-        self[textKey]
-          .attr( "y", self.size.height/5.3)
-          .attr( "x", pix + xmax/200 );
-        self[measKey]
-          .attr( "y", self.size.height/5.3 + linehspace)
-          .attr( "x", pix + xmax/125 )
-          .text( energyVal.toFixed(1) + " keV" );
-      }
-    }
-
-    if (!singleEscapeForwardOutOfBounds)
-      createOrUpdateEscape('singleEscapeForward', singleEscapeForwardEnergy, singleEscapeForwardPix,
-                           self.options.txt.singleEscape, 'escapeLineForward', null);
-
-    if (!doubleEscapeForwardOutOfBounds)
-      createOrUpdateEscape('doubleEscapeForward', doubleEscapeForwardEnergy, doubleEscapeForwardPix,
-                           self.options.txt.doubleEscape, 'escapeLineForward', null);
-
-    if ( singleEscapeOutOfBounds )
-      return;
-
-    createOrUpdateEscape('singleEscape', singleEscapeEnergy, singleEscapePix,
-                         self.options.txt.singleEscape, 'peakLine', null);
-
-    if (doubleEscapeOutOfBounds)
-      return;
-
-    createOrUpdateEscape('doubleEscape', doubleEscapeEnergy, doubleEscapePix,
-                         self.options.txt.doubleEscape, 'peakLine', self.options.featureLineWidth);
+    self.mouseEdge
+      .attr("x1", m[0])
+      .attr("x2", m[0])
+      .attr("y2", self.size.height);
+    self.mouseEdgeText
+      .attr( "x", m[0] + xmax/125 )
+      .attr( "y", self.size.height/4)
+      .text( energy.toFixed(1) + " keV");
   }
 
   /* Creates (on first call) and updates a feature marker: a vertical line plus 2 text labels.
@@ -7278,7 +7135,9 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy ) {
        textY           y-coord of the upper text (lower text is `textY + linehspace`)
        textOnUpdate    if true, re-sets textLabel on every update (e.g. the Compton peak's angle can change)
        textXOffset     x-offset from `pix` for the upper text; default xmax/200
-       measXOffset     x-offset from `pix` for the lower text; default xmax/125 */
+       measXOffset     x-offset from `pix` for the lower text; default xmax/125
+       lineClass       class of the line; default "peakLine"
+       noStrokeWidth   if true, the line gets no stroke-width (default options.featureLineWidth) */
   function ensureLineMarker(keyPrefix, pix, opts) {
     var textKey = keyPrefix + 'Text';
     var measKey = keyPrefix + 'Meas';
@@ -7287,8 +7146,9 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy ) {
 
     if (!self[keyPrefix]) {
       self[keyPrefix] = self.vis.append("line")
-        .attr("class", "peakLine")
-        .attr("stroke-width", self.options.featureLineWidth);
+        .attr("class", opts.lineClass || "peakLine");
+      if( !opts.noStrokeWidth )
+        self[keyPrefix].attr("stroke-width", self.options.featureLineWidth);
       self[textKey] = self.vis.append("text").attr("class", "peakText");
       self[measKey] = self.vis.append("text").attr("class", "peakText");
       if (!opts.textOnUpdate) self[textKey].text(opts.textLabel);
@@ -7307,19 +7167,25 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy ) {
       .text(opts.measText);
   }
 
+  function updateEscapePeaks() {
+    const show = self.options.showEscapePeaks && !cursorIsOutOfBounds && !self.dragging_plot;
+    escapes.forEach( function(esc){
+      const e = energy + esc[1], pix = self.xScale(e);
+      if( !show || outOfBounds(pix) || (e < 0) )
+        deleteMarker( esc[0], true );
+      else
+        ensureLineMarker( esc[0], pix, { textLabel: esc[2], measText: e.toFixed(1) + " keV", textY: self.size.height/5.3,
+                                          lineClass: esc[3], noStrokeWidth: !esc[4] } );
+    } );
+  }
+
   function updateComptonPeaks() {
     var compAngleRad = self.options.comptonPeakAngle * (3.14159265/180.0);
     var comptonPeakEnergy = energy / (1 + ((energy/510.99891)*(1-Math.cos(compAngleRad))));
     var comptonPeakPix = self.xScale(comptonPeakEnergy);
 
-    if (shouldDeleteMouseEdge())
-      deleteMouseEdge(true);
-
-    var comptonPeakOutOfBounds = comptonPeakPix < 0 || comptonPeakPix > xmax;
-
-    if( !self.options.showComptonPeaks || cursorIsOutOfBounds || comptonPeakOutOfBounds || self.dragging_plot ) {
-      deleteComptonPeakLine();
-      updateMouseEdge();
+    if( !self.options.showComptonPeaks || cursorIsOutOfBounds || outOfBounds(comptonPeakPix) || self.dragging_plot ) {
+      deleteMarker( 'comptonPeak', true );
       return;
     }
 
@@ -7329,22 +7195,14 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy ) {
       textY: self.size.height/10,
       textOnUpdate: true
     });
-
-    updateMouseEdge();
   }
 
   function updateComptonEdge() {
     var compedge = energy - (energy / (1 + (2*(energy/510.99891))));
     var compEdgePix = self.xScale(compedge);
 
-    if ( shouldDeleteMouseEdge() )
-      deleteMouseEdge(true);
-
-    var comptonEdgeOutOfBounds = compEdgePix < 0  || compEdgePix > xmax ;
-
-    if( !self.options.showComptonEdge || cursorIsOutOfBounds || comptonEdgeOutOfBounds || self.dragging_plot ) {
-      self.deleteAndNullifyElements( 'comptonEdge', 'comptonEdgeText', 'comptonEdgeMeas' );
-      updateMouseEdge();
+    if( !self.options.showComptonEdge || cursorIsOutOfBounds || outOfBounds(compEdgePix) || self.dragging_plot ) {
+      deleteMarker( 'comptonEdge', true );
       return;
     }
 
@@ -7353,40 +7211,23 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy ) {
       measText: compedge.toFixed(1) + " keV",
       textY: self.size.height/22
     });
-
-    updateMouseEdge();
   }
 
   function updateSumPeaks( clickedEnergy ) {
-    if( shouldDeleteMouseEdge() )
-      deleteMouseEdge(true);
-
     if( !self.options.showSumPeaks || cursorIsOutOfBounds || self.dragging_plot ) {
-      if ( self.sumPeakHelpText ) {
-        self.sumPeakHelpText.remove(); 
-        self.sumPeakHelpText = null;
-      }
+      removeHelpText();
 
       if ( cursorIsOutOfBounds || self.dragging_plot ) {
-        if ( self.clickedSumPeak ) {
+        if ( self.clickedSumPeak )
           self.savedClickEnergy = self.xScale.invert( self.clickedSumPeak.attr("x1") );
-        }
-      } else if ( !self.options.showSumPeaks )
+      } else
         self.savedClickEnergy = null;
 
-      deleteClickedSumPeakMarker();
-    }
-
-    if( !self.options.showSumPeaks || cursorIsOutOfBounds || self.dragging_plot ) {
-      deleteSumPeakMarker();
-      deleteLeftSumPeakMarker();
+      deleteMarker( 'clickedSumPeak', false );
+      deleteMarker( 'sumPeak', true );
+      deleteMarker( 'leftSumPeak', true );
       return;
     }
-
-    if ( !self.options.showSumPeaks ) 
-      self.savedClickEnergy = null;
-
-    updateMouseEdge();
 
     var shouldUpdateClickedSumPeak = true,
         shouldUpdateSumPeak = true,
@@ -7405,19 +7246,13 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy ) {
       else shouldUpdateClickedSumPeak = false;
     }
 
-    if ( !shouldUpdateClickedSumPeak && !shouldUpdateSumPeak && !shouldUpdateLeftSumPeak )
-      return;
-
-    var clickedEdgeOutOfBounds = false;
     if ( shouldUpdateClickedSumPeak ) {
       self.savedClickEnergy = null;
 
       var clickedEdgePix = self.xScale( clickedEnergy  );
-      clickedEdgeOutOfBounds = clickedEdgePix < 0 || clickedEdgePix > xmax;
-
-      if (clickedEdgeOutOfBounds) {
+      if( outOfBounds(clickedEdgePix) ) {
         self.savedClickEnergy = clickedEnergy;
-        deleteClickedSumPeakMarker();
+        deleteMarker( 'clickedSumPeak', false );
       } else {
         if( !self.clickedSumPeak ){
           self.clickedSumPeak = self.vis.append("line")
@@ -7452,18 +7287,14 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy ) {
       
       self.sumPeakHelpText
           .attr( "x", m[0] + xmax/125 )
-          .attr( "y", self.size.height/3.5)
+          .attr( "y", self.size.height/3.5);
     } else {
-        if ( self.sumPeakHelpText ) {
-          self.sumPeakHelpText.remove(); 
-          self.sumPeakHelpText = null;
-        }
+      removeHelpText();
     }
 
     if ( shouldUpdateLeftSumPeak && energy < clickedEnergy ) {
       var leftSumEnergy = clickedEnergy - energy,
-          leftSumPix = self.xScale( leftSumEnergy  ),
-          leftSumOutOfBounds = leftSumPix < 0 || leftSumPix > xmax;
+          leftSumPix = self.xScale( leftSumEnergy  );
 
       ensureLineMarker('leftSumPeak', leftSumPix, {
         textLabel: self.options.txt.clickedPeak,
@@ -7472,19 +7303,17 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy ) {
         textXOffset: xmax/125
       });
 
-      if( leftSumOutOfBounds )
-        deleteLeftSumPeakMarker();
-
+      if( outOfBounds(leftSumPix) )
+        deleteMarker( 'leftSumPeak', true );
     } else
-      deleteLeftSumPeakMarker();
+      deleteMarker( 'leftSumPeak', true );
 
     if ( shouldUpdateSumPeak ) {
       var sumEnergy = energy + clickedEnergy,
           sumPix = self.xScale( sumEnergy  );
 
-      var sumPeakOutOfBounds = sumPix < 0 || sumPix > xmax;
-      if ( sumPeakOutOfBounds ) {
-        deleteSumPeakMarker();
+      if( outOfBounds(sumPix) ) {
+        deleteMarker( 'sumPeak', true );
         return;
       }
 
@@ -7500,6 +7329,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy ) {
     }
   }
 
+  updateMouseEdge();
   updateEscapePeaks();
   updateComptonPeaks();
   updateComptonEdge();
