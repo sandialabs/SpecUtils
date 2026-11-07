@@ -2654,9 +2654,10 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
 
     self.endYAxisScalingAction()();
 
+    // A pan, zoom-out drag, or x-axis drag changed the range: a user action (InterSpec makes it undoable)
     let domain = self.xScale.domain();
     if( !self.origdomain || !domain || self.origdomain[0]!==domain[0] || self.origdomain[1]!==domain[1] ){
-      self.WtEmit(self.chart.id, {name: 'xrangechanged'}, domain[0], domain[1], self.size.width, self.size.height, false );
+      self.WtEmit(self.chart.id, {name: 'xrangechanged'}, domain[0], domain[1], self.size.width, self.size.height, true );
     }
 
     self._resetTransientPointerState();
@@ -3333,13 +3334,13 @@ SpectrumChartD3.prototype._resetTransientPointerState = function() {
 };
 
 /* Ends an x-axis label drag released outside the plot area, emitting the new range as handleVisMouseUp
-   does for releases inside it (user_action false). */
+   does for releases inside it. */
 SpectrumChartD3.prototype._endXAxisDrag = function(){
   if( !this.xaxisdown )
     return;
   this.xaxisdown = null;
   const d = this.xScale.domain();
-  this.WtEmit( this.chart.id, {name: 'xrangechanged'}, d[0], d[1], this.size.width, this.size.height, false );
+  this.WtEmit( this.chart.id, {name: 'xrangechanged'}, d[0], d[1], this.size.width, this.size.height, true );
 };
 
 SpectrumChartD3.prototype.handleCancelAllMouseEvents = function() {
