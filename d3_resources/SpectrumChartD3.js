@@ -3363,17 +3363,9 @@ SpectrumChartD3.prototype.drawSearchRanges = function() {
     return;
   }
 
-  let domain = self.xScale.domain();
-  let lx = domain[0], ux = domain[1];
-
-  let inrange = [];
-  
-  self.searchEnergyWindows.forEach( function(w){
-    let lw = w.energy - w.window;
-    let uw = w.energy + w.window;
-
-    if( (uw > lx && uw < ux) || (lw > lx && lw < ux) || (lw <= lx && uw >= ux) )
-      inrange.push(w);
+  const [lx, ux] = self.xScale.domain();
+  const inrange = self.searchEnergyWindows.filter( function(w){
+    return ((w.energy + w.window) > lx) && ((w.energy - w.window) < ux);
   } );
 
   var tx = function(d) { return "translate(" + self.xScale(Math.max(lx,d.energy-d.window)) + ",0)"; };
@@ -3432,30 +3424,18 @@ SpectrumChartD3.prototype.drawHighlightRegions = function(){
     return;
   }
   
-  const lx = self.xScale.domain()[0], ux = self.xScale.domain()[1], h = self.size.height;
- 
-  const inrange = [];
- 
+  const [lx, ux] = self.xScale.domain(), h = self.size.height;
+
   // highlightRegions: [{lowerEnergy,upperEnergy,fill,hash,drawRegion,text}]; drawRegion (optional) is 'All' (default) or 'BelowData'
-  self.highlightRegions.forEach( function(w){
-    const lw = w.lowerEnergy, uw = w.upperEnergy;
-   
-    if( (uw > lx && uw < ux) || (lw > lx && lw < ux) || (lw <= lx && uw >= ux) ){
-      console.assert( !w.drawRegion || (w.drawRegion === "All") || (w.drawRegion === "BelowData"), "Invalid HighlightRegion.drawRegion" );
-      inrange.push(w);
-    }
+  const inrange = self.highlightRegions.filter( function(w){
+    console.assert( !w.drawRegion || (w.drawRegion === "All") || (w.drawRegion === "BelowData"), "Invalid HighlightRegion.drawRegion" );
+    return (w.upperEnergy > lx) && (w.lowerEnergy < ux);
   } );
- 
+
   // Spectrum for 'BelowData' regions: the first foreground (TODO: let the region specify it)
   const spectra = (self.rawData && self.rawData.spectra) ? self.rawData.spectra : [];
-  let spectrum = (spectra.length > 0) ? spectra[0] : null;
-  for( let j = 0; j < spectra.length; ++j ){
-    if( spectra[j].type === "FOREGROUND" ){
-      spectrum = spectra[j];
-      break;
-    }
-  }
-  
+  const spectrum = spectra.find( function(s){ return s.type === "FOREGROUND"; } ) || spectra[0] || null;
+
   const belowDataPointsGenerator = function(region){
     if( !spectrum )
       return [];
@@ -3543,32 +3523,21 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
   // Skip tiny lines to limit DOM size for heavy nuclides - more of them while zooming, for smoothness
   const disp_thresh = is_zoomming ? 0.025 : 0.0001;
 
-  function getLinesInRange(xrange,lines) {
-    var bisector = self._bisecE;
-    var lindex = bisector.left( lines, xrange[0] );
-    var rindex = bisector.right( lines, xrange[1] );
-    return lines.slice(lindex,rindex);
-  }
+  // The lines of `group` in view, and large enough to show; also sets group.maxVisibleAmp
+  const domain = self.xScale.domain();
+  const visibleLines = function( group ){
+    const lines = group.lines.slice( self._bisecE.left( group.lines, domain[0] ), self._bisecE.right( group.lines, domain[1] ) );
+    // Include the no-summing height d.hu, so the shaded summing-out segment fits on the chart
+    group.maxVisibleAmp = d3.max(lines, function(d){return Math.max(d.h, d.hu||0);});  // same object as lines[i].parent
+    const threshold = disp_thresh * group.maxVisibleAmp;
+    return lines.filter(function(d) { return (Math.max(d.h, d.hu||0) >= threshold) || d.major; });
+  };
 
   let reflines = [];
-  if( self.refLines ){
-    self.refLines.forEach( function(input) {
-      let lines = getLinesInRange(self.xScale.domain(),input.lines);
-      // Include the no-summing height d.hu, so the shaded summing-out segment fits on the chart
-      input.maxVisibleAmp = d3.max(lines, function(d){return Math.max(d.h, d.hu||0);});  // same object as lines[i].parent
-      const threshold = disp_thresh * input.maxVisibleAmp;
-      lines = lines.filter(function(d) { return (Math.max(d.h, d.hu||0) >= threshold) || d.major; });
-      reflines = reflines.concat( lines );
-    });
-  }
-
-  if( !is_zoomming && self.currentKineticRefLine ){
-    let lines = getLinesInRange(self.xScale.domain(),self.currentKineticRefLine.lines);
-    self.currentKineticRefLine.maxVisibleAmp = d3.max(lines, function(d){return Math.max(d.h, d.hu||0);});
-    const threshold = disp_thresh * self.currentKineticRefLine.maxVisibleAmp;
-    lines = lines.filter(function(d) { return (Math.max(d.h, d.hu||0) >= threshold) || d.major; });
-    reflines = reflines.concat( lines );
-  }
+  if( self.refLines )
+    self.refLines.forEach( function(input){ reflines = reflines.concat( visibleLines(input) ); } );
+  if( !is_zoomming && self.currentKineticRefLine )
+    reflines = reflines.concat( visibleLines(self.currentKineticRefLine) );
 
   reflines.sort( function(l,r){ return ((l.e < r.e) ? -1 : (l.e===r.e ? 0 : 1)); } );
 
@@ -3580,13 +3549,10 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
 
   function stroke(d){ return d.color ? d.color : d.parent.color; };
 
-  function dashfunc(d){
-    const particles = ["gamma", "xray", "beta", "alpha",   "positron", "electronCapture", "cascade-sum", "S.E.",   "D.E." ];
-    const dash      = [null,    ("3,3"),("1,1"),("3,2,1"), ("3,1"),    ("6,6"),           ("6,6"),       ("4,1"),  ("4,1")];
-    const index = particles.indexOf(d.particle);
-    if( index < 0 && (d.particle !== "gamma, xray") && (d.particle !== "sum-gamma")) { return null; } // combined lines can have e.g. "gamma, xray"
-    return (index > -1) ? dash[index] : null;
-  };
+  // Dash pattern per particle type; gammas, and combined lines (e.g. "gamma, xray"), are solid
+  const dashes = { xray: "3,3", beta: "1,1", alpha: "3,2,1", positron: "3,1", electronCapture: "6,6",
+                   "cascade-sum": "6,6", "S.E.": "4,1", "D.E.": "4,1" };
+  const dashfunc = function(d){ return dashes[d.particle] || null; };
 
   const h = self.size.height;
   const m = Math.min(h,self.options.refLineTopPad); // margin at the top of the chart
@@ -3597,8 +3563,7 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
     .attr("transform", tx)
     .append("line")
     .style("stroke-dasharray", dashfunc )
-    .attr("stroke", stroke )
-    .attr("y1", h );
+    .attr("stroke", stroke );
 
   gy.exit().remove();
 
@@ -3618,29 +3583,22 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
     .attr("y2", y2Solid )
     .attr("y1", h );  //needed for initial load sometimes
 
-  gy.select("line.sumout-lost").remove();
-  gy.filter( isLoss )
-    .append("line")
-    .attr("class", "sumout-lost")
-    .style("opacity", 0.35)
-    .attr("stroke", stroke )
-    .attr("stroke-width", self.options.refLineWidth )
-    .attr("y1", y2Hu )
-    .attr("y2", y2Lin )
-    .attr("x1", 0)
-    .attr("x2", 0);
-
-  gy.select("line.sumin-gain").remove();
-  gy.filter( isGain )
-    .append("line")
-    .attr("class", "sumin-gain")
-    .style("stroke-dasharray", "3,2")
-    .attr("stroke", stroke )
-    .attr("stroke-width", self.options.refLineWidth )
-    .attr("y1", y2Hu )
-    .attr("y2", y2Lin )
-    .attr("x1", 0)
-    .attr("x2", 0);
+  // The summing segment, between the heights with and without summing
+  const appendSumSegment = function( cls, filterFcn, styleName, styleValue ){
+    gy.select("line." + cls).remove();
+    gy.filter( filterFcn )
+      .append("line")
+      .attr("class", cls)
+      .style(styleName, styleValue)
+      .attr("stroke", stroke )
+      .attr("stroke-width", self.options.refLineWidth )
+      .attr("y1", y2Hu )
+      .attr("y2", y2Lin )
+      .attr("x1", 0)
+      .attr("x2", 0);
+  };
+  appendSumSegment( "sumout-lost", isLoss, "opacity", 0.35 );
+  appendSumSegment( "sumin-gain", isGain, "stroke-dasharray", "3,2" );
 
   // Dotted extensions above major lines (refLineVerbosity >= 2)
   gy.select("line.major-extension").remove();
@@ -3769,10 +3727,6 @@ SpectrumChartD3.prototype.handleUpdateKineticRefLineUpdate = function( posOverri
   const domain = this.xScale.domain();
   const energyBisector = this._bisecE.left;  // lines are sorted by energy
 
-  // Find the line with the lowest weight across all reference line groups
-  let minWeight = Number.MAX_VALUE;
-  let bestRefLine = null;
-  
   for( const refLineGroup of this.kineticRefLines.ref_lines ) {
     if( !refLineGroup.src_lines || !refLineGroup.src_lines.lines || !refLineGroup.src_lines.lines.length ) continue;
     
@@ -3800,11 +3754,6 @@ SpectrumChartD3.prototype.handleUpdateKineticRefLineUpdate = function( posOverri
         minGroupWeight = weight;
         bestLineInGroup = line;
       }
-      
-      if( (weight < minWeight) && (delta_energy < 5*peak_sigma)  ) {
-        minWeight = weight;
-        bestRefLine = refLineGroup.src_lines;
-      }
     }
     
     if( minGroupWeight < Number.MAX_VALUE )
@@ -3816,17 +3765,12 @@ SpectrumChartD3.prototype.handleUpdateKineticRefLineUpdate = function( posOverri
   }
   
   // Sort by ascending weight; keep at most 5, within 8x the minimum weight
-  refLineMinWeights
-    .splice(0, refLineMinWeights.length, ...refLineMinWeights
-    .sort((a, b) => a.minWeight - b.minWeight)
-    .filter((item, i) => i < 5 && item.minWeight <= (refLineMinWeights[0]?.minWeight || 1) * 8.0));
-  
-  if( bestRefLine && this.refLines && this.refLines.some( input => bestRefLine.parent == input.parent ) ){
-    bestRefLine = null;
-  }
-  
+  refLineMinWeights.sort( (a, b) => a.minWeight - b.minWeight );
+  const cutoff = (refLineMinWeights[0]?.minWeight || 1) * 8.0;
+
   // Candidates to cycle through (excluding sources already shown as reference lines)
   const newCandidates = refLineMinWeights
+    .filter( (item, i) => (i < 5) && (item.minWeight <= cutoff) )
     .filter(item => !this.refLines || !this.refLines.some( input => item.lines.src_lines.parent == input.parent ))
     .map(item => ({ 
       lines: item.lines.src_lines, 
@@ -3937,16 +3881,12 @@ SpectrumChartD3.prototype.cycleKineticRefLine = function( direction, isAutomatic
   }
   
   // Manual navigation stops auto-cycling
-  if( !isAutomatic ) {
+  if( !isAutomatic )
     this.stopKineticRefLineCycling();
-  }
-  
-  if( direction > 0 ) {
-    this.currentKineticRefLineIndex = (this.currentKineticRefLineIndex + 1) % this.candidateKineticRefLines.length;
-  } else {
-    this.currentKineticRefLineIndex = (this.currentKineticRefLineIndex - 1 + this.candidateKineticRefLines.length) % this.candidateKineticRefLines.length;
-  }
-  
+
+  const n = this.candidateKineticRefLines.length;
+  this.currentKineticRefLineIndex = (this.currentKineticRefLineIndex + ((direction > 0) ? 1 : (n - 1))) % n;
+
   this.currentKineticRefLine = this.candidateKineticRefLines[this.currentKineticRefLineIndex].lines;
   this.drawRefGammaLines();
   this.updateCurrentKineticDisplay();
@@ -4071,16 +4011,13 @@ SpectrumChartD3.prototype.updateRefLineDisplay = function( linedata, refLineSour
                    .attr("dy", "1em")
                    .attr("fill", refLineSource.color || "#000");
   
-  svgtxt.selectAll("tspan:not(.candidate)").remove();
-  
-  if ( self.options.showRefLineInfoForMouseOver ) {
-    svgtxt.append('svg:tspan').attr('x', 0).attr('dy', "1em").text( textdescrip );
-    if( txt )
-      svgtxt.append('svg:tspan').attr('x', 0).attr('dy', "1em").text( txt );
-    if( sumTxt )
-      svgtxt.append('svg:tspan').attr('x', 0).attr('dy', "1em").text( sumTxt );
-    if( attTxt )
-      svgtxt.append('svg:tspan').attr('x', 0).attr('dy', "1em").text( attTxt );
+  svgtxt.selectAll("tspan").remove();
+
+  if( self.options.showRefLineInfoForMouseOver ){
+    [textdescrip, txt, sumTxt, attTxt].forEach( function(line){
+      if( line )
+        svgtxt.append('svg:tspan').attr('x', 0).attr('dy', "1em").text( line );
+    } );
   }
 }//SpectrumChartD3.prototype.updateRefLineDisplay
 
@@ -4140,57 +4077,51 @@ SpectrumChartD3.prototype.applyRefLineHoverStyling = function( nearestline, skip
 }//SpectrumChartD3.prototype.applyRefLineHoverStyling
 
 /** -------------- Grid Lines -------------- */
-SpectrumChartD3.prototype.setGridX = function( onstate, dontRedraw ) {
-  this.options.gridx = onstate;
+SpectrumChartD3.prototype.setGridX = function( onstate, dontRedraw ) { this._setGrid( true, onstate, dontRedraw ); };
+SpectrumChartD3.prototype.setGridY = function( onstate, dontRedraw ) { this._setGrid( false, onstate, dontRedraw ); };
 
-  if( this.xGridBody )
-    this.xGridBody.remove();
-  this.xGrid = null;
-  this.xGridBody = null;
-  
+/* Shows or hides the x (isX) or y grid lines. */
+SpectrumChartD3.prototype._setGrid = function( isX, onstate, dontRedraw ) {
+  const gridName = isX ? 'xGrid' : 'yGrid', bodyName = gridName + 'Body';
+  this.options[isX ? 'gridx' : 'gridy'] = onstate;
+
+  if( this[bodyName] )
+    this[bodyName].remove();
+  this[gridName] = null;
+  this[bodyName] = null;
+
   if( onstate ) {
-    this.xGrid = d3.svg.axis().scale(this.xScale)
-                   .orient("bottom")
-                   .innerTickSize(-this.size.height)
-                   .outerTickSize(0)
-                   .tickFormat( "" )
-                   .tickPadding(10)
-                   .ticks( 20,"" );
-
-    this.xGridBody = this.vis.insert("g", ".refLineInfo")
-        .attr("class", "xgrid" )
-        .attr("transform", "translate(0," + this.size.height + ")")
-        .call( this.xGrid );
-  }
-  
-  if( !dontRedraw )
-    this.redraw(true)();
-}
-
-SpectrumChartD3.prototype.setGridY = function( onstate, dontRedraw ) {
-  this.options.gridy = onstate;
-
-  if( this.yGridBody )
-    this.yGridBody.remove();
-  this.yGrid = null;
-  this.yGridBody = null;
-  
-  if( onstate ) {
-    this.yGrid = d3.svg.axis().scale(this.yScale)
-                   .orient("left")
-                   .innerTickSize(-this.size.width)
+    const grid = d3.svg.axis().scale( isX ? this.xScale : this.yScale )
+                   .orient( isX ? "bottom" : "left" )
+                   .innerTickSize( isX ? -this.size.height : -this.size.width )
                    .outerTickSize(0)
                    .tickFormat( "" )
                    .tickPadding(10);
+    if( isX )
+      grid.ticks( 20, "" );
 
-    this.yGridBody = this.vis.insert("g", ".refLineInfo")
-        .attr("class", "ygrid" )
-        .call( this.yGrid );
+    const body = this.vis.insert("g", ".refLineInfo").attr("class", isX ? "xgrid" : "ygrid" );
+    if( isX )
+      body.attr("transform", "translate(0," + this.size.height + ")");
+    body.call( grid );
+
+    this[gridName] = grid;
+    this[bodyName] = body;
   }
 
   if( !dontRedraw )
     this.redraw()();
-}
+};
+
+/* Updates a grid in place to the axis' ticks ([{value,major}]).  The minor/major class is re-stamped BY
+   VALUE, as the axis reuses tick nodes keyed by value; minors keep the "tick" class, as d3's axis join
+   selects .tick (else ticks would duplicate). */
+SpectrumChartD3.prototype._updateGridTicks = function( body, grid, ticks, tickValues ){
+  const major = {};
+  ticks.forEach( function(t){ if( t.major ) major[t.value] = true; } );
+  body.call( grid.tickValues( tickValues ) );
+  body.selectAll('g.tick').attr("class", function(d){ return major[d] ? "tick" : "tick minorgrid"; });
+};
 
 /** -------------- Mouse Coordinate Info -------------- */
 SpectrumChartD3.prototype.addMouseInfoBox = function(){
@@ -4220,58 +4151,37 @@ SpectrumChartD3.prototype.updateMouseCoordText = function( posOverride ) {
 
   const p = posOverride ? posOverride : self.getMousePos();
 
-  if( !p ){
-    self.mousedOverRefLine = null;
-    self.refLineInfo.style("display", "none");
-    self.mouseInfo.style("display", "none");
-    return;
-  }
-
-  var energy = self.xScale.invert(p[0]);
-  var y = self.yScale.invert(p[1]);
-
-  // Channel and counts at this energy
-  var channel, lowerchanval, counts = null, backgroundSubtractCounts = null;
-  var foreground = self.rawData.spectra[0];
-  var background = self.getSpectrumByID(foreground.backgroundID);
-  var bisector = self._bisecX;
-  channel = (foreground.x && foreground.x.length) ? self._bisecRaw.right(foreground.x, energy) : -1;
-  if( foreground.points && foreground.points.length ){
-    lowerchanval = bisector.left(foreground.points,energy,1) - 1;
-    counts = foreground.points[lowerchanval].y; 
-  }
-  if (self.options.backgroundSubtract && counts !== null && background) {
-    lowerchanval = bisector.left(background.points,energy,1) - 1;
-    backgroundSubtractCounts = Math.max(0, counts - (background.points[lowerchanval] ? background.points[lowerchanval].y : 0));
-  }
-
   // TODO: also give background/secondary counts, and a channel range when rebinFactor != 1
   if( self.options.showMouseStats ){
+    // Channel and counts at this energy
+    const energy = self.xScale.invert(p[0]);
+    const foreground = self.rawData.spectra[0];
+    const background = self.getSpectrumByID(foreground.backgroundID);
+    const channel = (foreground.x && foreground.x.length) ? self._bisecRaw.right(foreground.x, energy) : -1;
+    let counts = null, backgroundSubtractCounts = null;
+    if( foreground.points && foreground.points.length )
+      counts = foreground.points[self._bisecX.left(foreground.points,energy,1) - 1].y;
+    if( self.options.backgroundSubtract && (counts !== null) && background ){
+      const bpoint = background.points[self._bisecX.left(background.points,energy,1) - 1];
+      backgroundSubtractCounts = Math.max(0, counts - (bpoint ? bpoint.y : 0));
+    }
+
+    const round = (v) => Math.round(10*v)/10;
+    const perRebin = (foreground.rebinFactor === 1) ? "" : ("/" + foreground.rebinFactor);
+    const xmmsg = round(energy) + " keV" + (channel ? (", chan: " + channel) : "");
+    const ymmsg = ((counts !== null) ? ("counts: " + round(counts) + perRebin + ", ") : "") + "y: " + round(self.yScale.invert(p[1]));
+
     self.mouseInfo.style("display", null );
-    var mousetxt = self.mouseInfo.select("text");
+    const mousetxt = self.mouseInfo.select("text");
     mousetxt.attr('dy', "-2em");
     mousetxt.selectAll("tspan").remove();
 
-    var xmmsg = ""+(Math.round(10*energy)/10) + " keV";
-    if( channel )
-      xmmsg += ", chan: " + channel;
-    var ymmsg = "";
-    if( counts !== null )
-      ymmsg += "counts: " + (Math.round(10*counts)/10) + (foreground.rebinFactor === 1 ? "" : ("/" + foreground.rebinFactor));
-    ymmsg += (counts!==null?", ":"") + "y: " + (Math.round(10*y)/10);
-    var bgsubmsg = "";
-    if( backgroundSubtractCounts !== null )
-      bgsubmsg += self.options.txt.backSubCounts + ": " + (Math.round(10*backgroundSubtractCounts)/10) + (foreground.rebinFactor === 1 ? "" : ("/" + foreground.rebinFactor));
-
-    var bgsubmsglen = 0;
-    if (backgroundSubtractCounts !== null)
-      bgsubmsglen = mousetxt.append('svg:tspan').attr('x', "-12em").attr('dy', "-1em")
-                      .text( bgsubmsg ).node().getComputedTextLength();
-
-    var ymmsglen = mousetxt.append('svg:tspan').attr('x', "-12em").attr('dy', "-1em")
-                    .text( ymmsg ).node().getComputedTextLength();
-    var xmmsglen = mousetxt.append('svg:tspan').attr('x', "-12em").attr('dy', "-1em")
-            .text( xmmsg ).node().getComputedTextLength();
+    // Adds a line of text, returning its length
+    const addLine = (txt) => mousetxt.append('svg:tspan').attr('x', "-12em").attr('dy', "-1em").text( txt ).node().getComputedTextLength();
+    const bgsubmsglen = (backgroundSubtractCounts === null) ? 0
+                        : addLine( self.options.txt.backSubCounts + ": " + round(backgroundSubtractCounts) + perRebin );
+    const ymmsglen = addLine( ymmsg );
+    const xmmsglen = addLine( xmmsg );
 
     self.mouseInfoBox.attr('width', Math.max(xmmsglen,ymmsglen,bgsubmsglen) + 9 )
       .attr('height', backgroundSubtractCounts !== null ? '3.1em' : '2.5em')
@@ -4304,24 +4214,11 @@ SpectrumChartD3.prototype.updateMouseCoordText = function( posOverride ) {
 
   var reflines = self.vis.selectAll("g.ref");
 
-  // Undoes the hover styling of a reference line
-  function cleanupRefLineHover(groupSelection, lineData) {
-    const lineSelection = groupSelection.select("line");
-    lineSelection
-      .attr("stroke-width", self.options.refLineWidth);
-    
-    if( self.options.refLineVerbosity >= 1 ) {
-      if( lineData.major && self.options.refLineVerbosity >= 2 ) {
-        groupSelection.select("line.major-extension")
-          .attr("stroke-width", self.options.refLineWidth)
-          .style("opacity", 0.5);
-      } else {
-        groupSelection.select("line.temp-extension").remove();
-      }
-    }
-
-    groupSelection.select("circle.ref-hover-indicator").remove();
-    lineData.mousedover = null;
+  // Undoes the hover styling of a reference line <g>
+  function cleanupRefLineHover( node ){
+    self.applyLineStyling( node, node.__data__, false );
+    d3.select(node).select("circle.ref-hover-indicator").remove();
+    node.__data__.mousedover = null;
   }
 
   reflines[0].forEach( function(d,i){
@@ -4331,7 +4228,7 @@ SpectrumChartD3.prototype.updateMouseCoordText = function( posOverride ) {
 
     // In principle unnecessary, but without it lines sometimes stay fat
     if( d.__data__.mousedover && d !== self.mousedOverRefLine ){
-      cleanupRefLineHover(d3.select(d), d.__data__);
+      cleanupRefLineHover( d );
     }
 
     var dist = dpx + dpx/(yh/visy);
@@ -4344,7 +4241,7 @@ SpectrumChartD3.prototype.updateMouseCoordText = function( posOverride ) {
 
   if( nearestpx > 10 ) {
     if( self.mousedOverRefLine ){
-      cleanupRefLineHover(d3.select(self.mousedOverRefLine), self.mousedOverRefLine.__data__);
+      cleanupRefLineHover( self.mousedOverRefLine );
     }
     self.mousedOverRefLine = null;
     self.refLineInfo.style("display", "none");
@@ -4355,14 +4252,12 @@ SpectrumChartD3.prototype.updateMouseCoordText = function( posOverride ) {
     return;
 
   if( self.mousedOverRefLine ){
-    cleanupRefLineHover(d3.select(self.mousedOverRefLine), self.mousedOverRefLine.__data__);
+    cleanupRefLineHover( self.mousedOverRefLine );
   }
 
   var linedata = nearestline.__data__;
   linedata.mousedover = true;
-  const e = linedata.e;
-  const sf = linedata.h;
-  const linepx = self.xScale(e);
+  const linepx = self.xScale(linedata.e);
 
   self.refLineInfo.style("display", null).attr("transform", "translate("+linepx+",0)" );
 
@@ -4508,60 +4403,56 @@ SpectrumChartD3.prototype.updateLegend = function() {
   this.legBody.selectAll("g").remove();
 
   var ypos = 0;
+
+  // Adds an entry, at ypos, with its title line; returns {entry, text, txtStart}
+  const addEntry = function( title ){
+    const entry = self.legBody.append("g").attr("transform","translate(0," + ypos + ")");
+    const text = entry.append("text").attr("class", "legentry");
+    const titlenode = text.append('svg:tspan').attr('x', "15").text( title );
+    const txtStart = 0.5*titlenode.node().getBBox().height;
+    titlenode.attr('y', txtStart);
+    return { entry: entry, text: text, txtStart: txtStart };
+  };
+
+  // Adds a line of text below what the entry already has
+  const addLine = function( e, txt ){
+    return e.text.append('svg:tspan').attr('x', "20").attr('y', e.txtStart + e.entry.node().getBBox().height).text( txt );
+  };
+
   const spectra = self.rawData ? self.rawData.spectra : [];
   spectra.forEach( function(spectrum,i){
     if( !spectrum || !spectrum.y || !spectrum.y.length )
       return;
-      
+
     const sf = ((typeof spectrum.yScaleFactor === "number") ? spectrum.yScaleFactor: 1);
     const lt = spectrum.liveTime;
     const rt = spectrum.realTime;
     const neutsum = spectrum.neutrons;
-      
+
     const nsum = sf*spectrum.dataSum;
-    const title = (spectrum.title ? spectrum.title : ("Spectrum " + (i+1)))
-                    + " (" + nsum.toFixed(nsum > 1000 ? 0 : 1) + " counts)";
-    
-    let thisentry = self.legBody.append("g")
-        .attr("transform","translate(0," + ypos + ")");
-      
-    let thistxt = thisentry.append("text")
-        .attr("class", "legentry");
-    
-    let titlenode = thistxt.append('svg:tspan')
-          .attr('x', "15")
-          .text( title );
-    const txtStart = 0.5*titlenode.node().getBBox().height;
-    titlenode.attr('y', txtStart);
-    
+    const e = addEntry( (spectrum.title ? spectrum.title : ("Spectrum " + (i+1)))
+                        + " (" + nsum.toFixed(nsum > 1000 ? 0 : 1) + " counts)" );
+    const thisentry = e.entry, thistxt = e.text, txtStart = e.txtStart;
+
     thisentry.append("path")
         .attr("class", "SpectrumLegendLine " + (spectrum.type ? " " + spectrum.type : "") )
         .attr("stroke", spectrum.lineColor ? spectrum.lineColor : null)
         .attr("stroke-width", self.options.spectrumLineWidth )
         .attr("d", "M0," + (txtStart - 1) + " L12," + (txtStart - 1) );
-    
+
     let ltnode, lttxt, dttxt;
     if( typeof lt === "number" )
     {
       lttxt = self.options.txt.liveTime + ": " + (sf*lt).toPrecision(4) + " s";
-      ltnode = thistxt.append('svg:tspan')
-        .attr('x', "20")
-        .attr('y', txtStart + thisentry.node().getBBox().height)
-        .text( lttxt );
+      ltnode = addLine( e, lttxt );
     }
-      
+
     if( typeof rt === "number" )
-      thistxt.append('svg:tspan')
-        .attr('x', "20")
-        .attr('y', txtStart + thisentry.node().getBBox().height)
-        .text( self.options.txt.realTime + ": " + (sf*rt).toPrecision(4) + " s");
-          
+      addLine( e, self.options.txt.realTime + ": " + (sf*rt).toPrecision(4) + " s" );
+
     if( sf != 1 )
-      thistxt.append('svg:tspan')
-        .attr('x', "20")
-        .attr('y', txtStart + thisentry.node().getBBox().height)
-        .text( self.options.txt.scaledBy + " " + sf.toPrecision(4) );
-      
+      addLine( e, self.options.txt.scaledBy + " " + sf.toPrecision(4) );
+
     if( (typeof lt === "number") && (typeof rt === "number") && (rt > 0) && ltnode )
     {
       dttxt = self.options.txt.deadTime + ": " + (100*(rt - lt) / rt).toPrecision(3) + "%";
@@ -4570,7 +4461,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
         .on("mouseover", function(){ ltnode.text(dttxt); } )
         .on("mouseout", function(){ ltnode.text(lttxt); });
     }
-          
+
     if( typeof neutsum === "number" ){
       const nrt = (typeof spectrum.neutronLiveTime === "number") ? spectrum.neutronLiveTime : (rt > 1.0E-6 ? rt : lt);
       const isCps = (typeof nrt === "number");
@@ -4579,7 +4470,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
       // Human-friendly number, to roughly the precision we care about
       let toLegendRateStr = function( val, ndig ){
         const powTen = Math.floor(Math.log10(Math.abs(val)));
-        
+
         if( Number.isInteger(val) || Number.isNaN(ndig) || Number.isNaN(powTen) )
           return '' + val;
         else if( (powTen < -4) || (powTen > ndig) )  // e.g. 6.096e-6 (ndig==3)
@@ -4590,19 +4481,16 @@ SpectrumChartD3.prototype.updateLegend = function() {
           return '' + val.toFixed(0);
       };//toLegendRateStr
 
-      thistxt.append('svg:tspan')
-              .attr('x', "20")
-              .attr('y', txtStart + thisentry.node().getBBox().height)
-              .text( self.options.txt.Neutrons + ": " + toLegendRateStr(neut,3) + (isCps ? " " + self.options.txt.cps : ""));
-      
+      addLine( e, self.options.txt.Neutrons + ": " + toLegendRateStr(neut,3) + (isCps ? " " + self.options.txt.cps : "") );
+
       // For a foreground/secondary neutron CPS, show how many sigma it is from the background's rate
       if( isCps
           && ((spectrum.type === self.spectrumTypes.FOREGROUND)
               || (spectrum.type === self.spectrumTypes.SECONDARY)) )
       {
         // Neutron info of the first background
-        let forNeut = null, forNeutLT = null;
-        
+        let backNeut = null, backNeutLT = null;
+
         for( let j = 0; j < spectra.length; ++j )
         {
           const spec = spectra[j];
@@ -4611,22 +4499,22 @@ SpectrumChartD3.prototype.updateLegend = function() {
               && ((typeof spec.neutronLiveTime === "number") || (typeof spec.realTime === "number"))
               && (typeof spec.neutrons === "number") )
           {
-            forNeut = spec.neutrons;
-            forNeutLT = (typeof spec.neutronLiveTime === "number") ? spec.neutronLiveTime
-                                                                   : (spec.realTime > 1.0E-6 ? spec.realTime : spec.liveTime);
+            backNeut = spec.neutrons;
+            backNeutLT = (typeof spec.neutronLiveTime === "number") ? spec.neutronLiveTime
+                                                                    : (spec.realTime > 1.0E-6 ? spec.realTime : spec.liveTime);
             break;
           }
         }//for( loop over spectrum )
-         
-        if( (typeof forNeut === "number") && (typeof forNeutLT === "number") && (neutsum>0 || forNeut>0) )
+
+        if( (typeof backNeut === "number") && (typeof backNeutLT === "number") && (neutsum>0 || backNeut>0) )
         {
-          const forRate = forNeut/forNeutLT;
-          const forRateSigma = Math.sqrt(forNeut) / forNeutLT;
+          const backRate = backNeut/backNeutLT;
+          const backRateSigma = Math.sqrt(backNeut) / backNeutLT;
           const rateSigma = Math.sqrt(neutsum) / nrt;
-          const sigma = Math.sqrt(rateSigma*rateSigma + forRateSigma*forRateSigma);
-          const nsigma = Math.abs(neut - forRate) / sigma;
-          const isneg = (neut < forRate);
-          
+          const sigma = Math.sqrt(rateSigma*rateSigma + backRateSigma*backRateSigma);
+          const nsigma = Math.abs(neut - backRate) / sigma;
+          const isneg = (neut < backRate);
+
           thistxt.append('svg:tspan')
             .attr('x', "40")
             .attr('y', txtStart + thisentry.node().getBBox().height - 4)
@@ -4642,7 +4530,7 @@ SpectrumChartD3.prototype.updateLegend = function() {
           .attr('y', txtStart + thisentry.node().getBBox().height - 5)
           .attr('style', 'display: none')
           .text( toLegendRateStr(neutsum,3) + " " + self.options.txt.neutrons + (typeof nrt === "number" ? (" in " + nrt.toPrecision(4) + " s") : "") );
-      
+
         thistxt  // replaces the dead-time hover handlers set above
           .on("mouseover", function(){
             thisentry.neutinfo.attr('style', 'font-size: 75%' )
@@ -4655,55 +4543,37 @@ SpectrumChartD3.prototype.updateLegend = function() {
             if( ltnode && lttxt ) ltnode.text(lttxt);
           });
        }// if( is CPS instead of sum neutrons )
-      
     }//if( typeof neut === "number" )
-      
+
     ypos += thisentry.node().getBBox().height + 5;
   });//spectra.forEach
 
   const templates = (self.rawData && self.rawData.templates) ? self.rawData.templates : [];
-  if( templates.length > 0 ){
-    templates.forEach( function(template,i){
-      if( !template || !template.y || !template.y.length )
-        return;
+  templates.forEach( function(template,i){
+    if( !template || !template.y || !template.y.length )
+      return;
 
-      const sf = ((typeof template.yScaleFactor === "number") ? template.yScaleFactor : 1);
-      const nsum = sf * (template.dataSum || 0);
-      const defaultTitle = (self.options.txt.templateDefaultTitle || "Template");
-      const title = (template.title ? template.title : (defaultTitle + " " + (i+1)))
-                      + " (" + nsum.toFixed(nsum > 1000 ? 0 : 1) + " counts)";
+    const sf = ((typeof template.yScaleFactor === "number") ? template.yScaleFactor : 1);
+    const nsum = sf * (template.dataSum || 0);
+    const defaultTitle = (self.options.txt.templateDefaultTitle || "Template");
+    const e = addEntry( (template.title ? template.title : (defaultTitle + " " + (i+1)))
+                        + " (" + nsum.toFixed(nsum > 1000 ? 0 : 1) + " counts)" );
 
-      let thisentry = self.legBody.append("g")
-          .attr("transform","translate(0," + ypos + ")");
+    // Filled swatch, matching the stacked-area fill
+    e.entry.append("rect")
+        .attr("class", "SpectrumLegendFill")
+        .attr("x", "0")
+        .attr("y", e.txtStart - 8)
+        .attr("width", "12")
+        .attr("height", "10")
+        .attr("fill", template.lineColor ? template.lineColor : "#888888")
+        .attr("stroke", "none");
 
-      let thistxt = thisentry.append("text")
-          .attr("class", "legentry");
+    if( sf != 1 )
+      addLine( e, self.options.txt.scaledBy + " " + sf.toPrecision(4) );
 
-      let titlenode = thistxt.append('svg:tspan')
-            .attr('x', "15")
-            .text( title );
-      const txtStart = 0.5*titlenode.node().getBBox().height;
-      titlenode.attr('y', txtStart);
-
-      // Filled swatch, matching the stacked-area fill
-      thisentry.append("rect")
-          .attr("class", "SpectrumLegendFill")
-          .attr("x", "0")
-          .attr("y", txtStart - 8)
-          .attr("width", "12")
-          .attr("height", "10")
-          .attr("fill", template.lineColor ? template.lineColor : "#888888")
-          .attr("stroke", "none");
-
-      if( sf != 1 )
-        thistxt.append('svg:tspan')
-          .attr('x', "20")
-          .attr('y', txtStart + thisentry.node().getBBox().height)
-          .text( self.options.txt.scaledBy + " " + sf.toPrecision(4) );
-
-      ypos += thisentry.node().getBBox().height + 5;
-    } );
-  }
+    ypos += e.entry.node().getBBox().height + 5;
+  } );
 
   var w = this.legBody.node().getBBox().width + 15;
   this.legendBox.attr('width', w );
@@ -4806,7 +4676,6 @@ SpectrumChartD3.prototype.yticks = function() {
   var renderymin = this.yScale.domain()[1],
       renderymax = this.yScale.domain()[0],
       heightpx = this.size.height;
-  var range = renderymax - renderymin;
 
     if( this.options.yscale === "lin" )
     {
@@ -4911,9 +4780,9 @@ SpectrumChartD3.prototype.yticks = function() {
 }
 
 /* Mousedown on a y-axis label starts a y-axis drag. */
-SpectrumChartD3.prototype.yaxisDrag = function(d) {
+SpectrumChartD3.prototype.yaxisDrag = function() {
   var self = this;
-  return function(d) {
+  return function() {
     var p = d3.mouse(self.vis[0][0]);
     self.yaxisdown = self.yScale.invert(p[1]);
   }
@@ -4947,18 +4816,8 @@ SpectrumChartD3.prototype.drawYTicks = function() {
        .text(v.major ? v.text : '');
     } );
 
-    if( this.yGridBody ) {
-      this.yGrid.tickValues( ytickvalues );
-
-      /* Update the grid in place; re-stamp the minor/major class BY VALUE, since the axis reuses
-         tick nodes keyed by value. */
-      const majorYVals = {};
-      ytick.forEach( function(t){ if( t.major ) majorYVals[t.value] = true; } );
-      this.yGridBody.call( this.yGrid );
-      // Minors keep the "tick" class - d3's axis join selects .tick (else ticks duplicate)
-      this.yGridBody.selectAll('g.tick')
-        .attr("class", function(d){ return majorYVals[d] ? "tick" : "tick minorgrid"; });
-    }
+    if( this.yGridBody )
+      this._updateGridTicks( this.yGridBody, this.yGrid, ytick, ytickvalues );
 }
 
 SpectrumChartD3.prototype.setAdjustYAxisPadding = function( adjust, pad ) {
@@ -5039,17 +4898,10 @@ SpectrumChartD3.prototype.handleYAxisWheel = function() {
   if( !d3.event )
     return;
 
-  let wdelta = d3.event.deltaY ? d3.event.deltaY : d3.event.sourceEvent ? d3.event.sourceEvent.wheelDelta : 0;
-
-  var mult = 0;
-  if( wdelta > 0 ){
-    mult = 0.02;  //zoom out
-  } else if( wdelta != 0 ) {
-    mult = -0.02; //zoom in
-  }
+  const wdelta = d3.event.deltaY || 0;
+  const mult = (wdelta > 0) ? 0.02 : ((wdelta < 0) ? -0.02 : 0);  // zoom out, or in
 
   if( self.options.yscale == "log" ) {
-    
     if( mult > 0 && self.options.logYFracBottom > 0.025 ){
       self.options.logYFracBottom -= mult;
     } else {
@@ -5065,23 +4917,13 @@ SpectrumChartD3.prototype.handleYAxisWheel = function() {
   
     self.options.logYFracTop = Math.max( self.options.logYFracTop, -0.95 );
   } else if( self.options.yscale == "lin" ) {
-    self.options.linYFracTop += mult;
-    self.options.linYFracTop = Math.min( self.options.linYFracTop, 0.85 );
-    self.options.linYFracTop = Math.max( self.options.linYFracTop, -0.95 );
+    self.options.linYFracTop = Math.max( Math.min( self.options.linYFracTop + mult, 0.85 ), -0.95 );
   } else if( self.options.yscale == "sqrt" ) {
-    self.options.sqrtYFracTop += mult;
-    self.options.sqrtYFracTop = Math.min( self.options.sqrtYFracTop, 0.85 );
-    self.options.sqrtYFracTop = Math.max( self.options.sqrtYFracTop, -0.95 );
+    self.options.sqrtYFracTop = Math.max( Math.min( self.options.sqrtYFracTop + mult, 0.85 ), -0.95 );
   }
 
   self.redraw()();
-  
-  if( d3.event.sourceEvent ){       
-   d3.event.sourceEvent.preventDefault();
-   d3.event.sourceEvent.stopPropagation();
-  } else {
-    SpectrumChartD3.stopEvent();
-  }
+  SpectrumChartD3.stopEvent();
   return false;
 }
 
@@ -5101,12 +4943,10 @@ SpectrumChartD3.prototype.xticks = function() {
 /* Mousedown on an x-axis label starts an x-axis drag. */
 SpectrumChartD3.prototype.xaxisDrag = function() {
   var self = this;
-  return function(d) {
-    var p = d3.mouse(self.vis[0][0]);
-
-    if (self.xScale.invert(p[0]) > 0){
-      self.xaxisdown = [self.xScale.invert(p[0]), self.xScale.domain()[0], self.xScale.domain()[1]];
-    }
+  return function() {
+    const energy = self.xScale.invert( d3.mouse(self.vis[0][0])[0] );
+    if( energy > 0 )
+      self.xaxisdown = [energy, self.xScale.domain()[0], self.xScale.domain()[1]];
   }
 }
 
@@ -5114,8 +4954,6 @@ SpectrumChartD3.prototype.drawXAxisArrows = function(show_arrow) {
   var self = this;
 
   if (self.options.showXRangeArrows) {
-    var max_x;
-
     if (!self.xaxis_arrow) {
       self.xaxis_arrow = self.svg.select('.xaxis').append('svg:defs')
         .attr("id", "xaxisarrowdef")
@@ -5132,12 +4970,8 @@ SpectrumChartD3.prototype.drawXAxisArrows = function(show_arrow) {
           .style("stroke", "black");
     }
 
-    max_x = self.min_max_x_values()[1];
-
-    if (!self.hasSpectrumData() || self.xScale.domain()[1] === max_x || (typeof show_arrow == 'boolean' && !show_arrow))
-      self.xAxisBody.select("path").attr("marker-end", null);
-    else
-      self.xAxisBody.select("path").attr("marker-end", "url(#arrowhead)");
+    const atEnd = !self.hasSpectrumData() || (self.xScale.domain()[1] === self.min_max_x_values()[1]);
+    self.xAxisBody.select("path").attr("marker-end", (atEnd || (show_arrow === false)) ? null : "url(#arrowhead)");
 
   } else {
     if (self.xaxis_arrow) {
@@ -5199,16 +5033,8 @@ SpectrumChartD3.prototype.drawXTicks = function() {
   }//if( this.hasCompactXAxis() and have x-axis title )
 
   if( self.xGridBody ) {
-    self.xGrid.tickValues( xtickvalues );
-
-    // Update in place; re-stamp minor/major BY VALUE (see drawYTicks)
-    const majorXVals = {};
-    xticks.forEach( function(t){ if( t.major ) majorXVals[t.value] = true; } );
-    self.xGridBody
-          .attr("transform", "translate(0," + self.size.height + ")")
-          .call( self.xGrid );
-    self.xGridBody.selectAll('g.tick')
-      .attr("class", function(d){ return majorXVals[d] ? "tick" : "tick minorgrid"; });
+    self.xGridBody.attr("transform", "translate(0," + self.size.height + ")");
+    self._updateGridTicks( self.xGridBody, self.xGrid, xticks, xtickvalues );
   }
 }//SpectrumChartD3.prototype.drawXTicks
 
@@ -5231,7 +5057,6 @@ SpectrumChartD3.prototype.setXAxisMaximum = function( maximum ) {
 }
 
 SpectrumChartD3.prototype.setXRangeArrows = function(d) {
-  var self = this;
   this.options.showXRangeArrows = d;
   this.drawXAxisArrows(d);
 }
@@ -5836,30 +5661,18 @@ SpectrumChartD3.prototype.handleTouchMoveRightSliderDrag = function(redraw) {
 
 /** -------------- Scale Factor (per-spectrum y-scale sliders) -------------- */
 SpectrumChartD3.prototype.numYScalers = function() {
-  var self = this;
-  
-  if( !this.options.scaleBackgroundSecondary || !self.rawData || !self.rawData.spectra )
+  if( !this.options.scaleBackgroundSecondary || !this.rawData || !this.rawData.spectra )
     return 0;
-  
-  let nonFore = 0;
-  self.rawData.spectra.forEach(function (spectrum) {
-    if( spectrum && spectrum.type && spectrum.type !== self.spectrumTypes.FOREGROUND
-      && spectrum.yScaleFactor != null && spectrum.yScaleFactor >= 0.0 )
-    nonFore += 1;
-  });
-  
-  return nonFore;
+
+  return this.rawData.spectra.filter( (spectrum) => spectrum && spectrum.type && (spectrum.type !== this.spectrumTypes.FOREGROUND)
+                                                    && (spectrum.yScaleFactor != null) && (spectrum.yScaleFactor >= 0.0) ).length;
 }
 
 /* Returns the spectrum currently being y-scaled by the scaler slider, or null. */
 SpectrumChartD3.prototype._adjustingSpectrum = function() {
   if( !this.rawData || !this.rawData.spectra || this.currentlyAdjustingSpectrumScale === null )
     return null;
-  for( let i = 0; i < this.rawData.spectra.length; ++i ){
-    if( this.rawData.spectra[i].type == this.currentlyAdjustingSpectrumScale )
-      return this.rawData.spectra[i];
-  }
-  return null;
+  return this.rawData.spectra.find( (s) => s.type == this.currentlyAdjustingSpectrumScale ) || null;
 }
 
 SpectrumChartD3.prototype.cancelYAxisScalingAction = function() {
@@ -5879,10 +5692,6 @@ SpectrumChartD3.prototype.endYAxisScalingAction = function() {
   var self = this;
   
   return function(){
-    if( self.currentlyAdjustingSpectrumScale === null
-      || !self.rawData || !self.rawData.spectra )
-      return;
-
     let scale = null;
     const spectrum = self._adjustingSpectrum();
     if( spectrum ){
@@ -5971,6 +5780,15 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
         .attr("width", "4px")
         .attr("height", scalerHeight );
 
+      // Starts adjusting this spectrum's scale
+      const beginScaling = function(){
+        spectrum.sliderRect.attr("stroke-opacity", 1.0).attr("fill-opacity", 1.0);
+        spectrum.sliderToggle.attr("stroke-opacity", 1.0).attr("fill-opacity", 1.0);
+        spectrum.startingYScaleFactor = spectrum.yScaleFactor;
+        self.currentlyAdjustingSpectrumScale = spectrum.type;
+        spectrum.sliderText.style( "display", null );
+      };
+
       spectrum.sliderToggle = spectrumSliderArea.append("circle")
         .attr("class", "scalertoggle")
         .attr("cx", Number(spectrum.sliderRect.attr("x")) + toggleRadius/2 - 1)
@@ -5981,22 +5799,12 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
         .attr("fill-opacity", 0.7)
         .style("cursor", "pointer")
         .on("mousedown", function(){
-          spectrum.sliderRect.attr("stroke-opacity", 1.0).attr("fill-opacity", 1.0);
-          spectrum.sliderToggle.attr("stroke-opacity", 1.0).attr("fill-opacity", 1.0);
-          spectrum.startingYScaleFactor = spectrum.yScaleFactor;
-          self.currentlyAdjustingSpectrumScale = spectrum.type;
-          spectrum.sliderText.style( "display", null )
+          beginScaling();
           SpectrumChartD3.stopEvent();
         })
         .on("mousemove", self.handleMouseMoveScaleFactorSlider())
         .on("mouseup", self.endYAxisScalingAction() )
-        .on("touchstart", function(){
-          spectrum.sliderRect.attr("stroke-opacity", 1.0).attr("fill-opacity", 1.0);
-          spectrum.sliderToggle.attr("stroke-opacity", 1.0).attr("fill-opacity", 1.0);
-          spectrum.startingYScaleFactor = spectrum.yScaleFactor;
-          self.currentlyAdjustingSpectrumScale = spectrum.type;
-          spectrum.sliderText.style( "display", null )
-        })
+        .on("touchstart", beginScaling)
         .on("touchmove", self.handleMouseMoveScaleFactorSlider())
         .on("touchend", self.endYAxisScalingAction() );
     }
@@ -6063,35 +5871,18 @@ SpectrumChartD3.prototype.handleMouseMoveScaleFactorSlider = function() {
 
     d3.select(document.body).style("cursor", "pointer");
 
-    var m = d3.mouse(spectrum.sliderRect[0][0]);
-    if( !m ){
-      // TODO: verify this touch-device fallback path actually runs.
-      m = d3.touches(spectrum.sliderRect[0][0]);
-      if( m.length !== 1 )
-        return;
-      m = m[0];
-    }
+    const m = d3.mouse(spectrum.sliderRect[0][0]);  // (d3.mouse handles touches too)
+    const scalerHeight = Number(spectrum.sliderRect.attr("height"));
+    const rad = Number(spectrum.sliderToggle.attr("r"));
+    const newTogglePos = Math.min(Math.max(0,m[1]+rad/2),scalerHeight);
+    const fracOnScale = 1.0 - newTogglePos/scalerHeight;
 
-    let scalerHeight = Number(spectrum.sliderRect.attr("height"));
-    let rad = Number(spectrum.sliderToggle.attr("r"));
-    let newTogglePos = Math.min(Math.max(0,m[1]+rad/2),scalerHeight);
+    // log y: from 0.001 to 1000x.  TODO: for lin and sqrt, 0.1, 1 and 10x at fracOnScale of 0, 0.5 and 1
+    const sf = (self.options.yscale === "log")
+               ? Math.exp( Math.log(0.001) + fracOnScale*(Math.log(1000) - Math.log(0.001)) )
+               : (1.38734467428311845572*(Math.exp(fracOnScale) - 1) + 0.1);
+    const spectrumScaleFactor = sf*spectrum.startingYScaleFactor;
 
-    let fracOnScale = 1.0 - newTogglePos/scalerHeight;
-
-    var sf = 1.0;
-    if( self.options.yscale === "log" ) {
-      // [0.001*scale, 1000*scale]
-      sf = Math.exp( Math.log(0.001) + fracOnScale*(Math.log(1000) - Math.log(0.001)) );
-    } else if( self.options.yscale === "sqrt" ) {
-      // TODO: sf from 0.01 to 100, with 0.5 giving 1
-      sf = 1.38734467428311845572*(Math.exp(fracOnScale) - 1) + 0.1;
-    } else {
-      // TODO: sf of 0.1, 1.0 and 10 at fracOnScale of 0, 0.5 and 1
-      sf = 1.38734467428311845572*(Math.exp(fracOnScale) - 1) + 0.1;
-    }
-    
-    var spectrumScaleFactor = sf*spectrum.startingYScaleFactor;
-    
     spectrum.sliderToggle.attr("cy", newTogglePos );
     spectrum.sliderText.text( (spectrumScaleFactor % 1 != 0) ? spectrumScaleFactor.toFixed(3) : spectrumScaleFactor.toFixed() );
     spectrum.yScaleFactor = spectrumScaleFactor;
