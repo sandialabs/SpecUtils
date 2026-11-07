@@ -8593,6 +8593,13 @@ SpectrumChartD3.prototype.areMultipleSpectrumPeaksShown = function() {
 }
 
 /** Returns the (first) spectrum with the given ID, or null (undefined if there are no spectra). */
+/* The spectra's titles, with "Spectrum <n>" for untitled ones; undefined with no spectrum data. */
+SpectrumChartD3.prototype.getSpectrumTitles = function() {
+  if( !this.hasSpectrumData() )
+    return;
+  return this.rawData.spectra.map( (spectrum, i) => spectrum.title ? spectrum.title : ("Spectrum " + (i + 1)) );
+};
+
 SpectrumChartD3.prototype.getSpectrumByID = function(id) {
   if (!this.hasSpectrumData())
     return;
