@@ -642,6 +642,15 @@ SpectrumChartD3 = function(elem, options) {
   
   d3.select(window).on("keydown.chart" + this.chart.id, this.keydown());
 
+  // Holding B or S makes a double-click, Ctrl-drag peak fit, or Shift-drag erase act on the background or
+  //  secondary spectrum.  Capture phase, so a B/S pressed mid-drag is seen before any app shortcut.
+  this.heldSpectrumKey = null;   // 'b' or 's', while held
+  this.dragSpectrumKey = null;   // for the current drag: the key held at mousedown, or pressed during it
+  d3.select(window)
+    .on("keydown.speckey" + this.chart.id, this.spectrumKeyHandler(true), true)
+    .on("keyup.speckey" + this.chart.id, this.spectrumKeyHandler(false), true)
+    .on("blur.speckey" + this.chart.id, function(){ self.heldSpectrumKey = null; });
+
   this._initGestureModes();
 }
 
@@ -651,6 +660,9 @@ SpectrumChartD3.prototype.destroy = function() {
   d3.select(window).on("keydown.chart" + this.chart.id, null);
   d3.select(window).on("mouseup.chart" + this.chart.id, null);
   d3.select(window).on("blur.chart" + this.chart.id, null);
+  d3.select(window).on("keydown.speckey" + this.chart.id, null)
+    .on("keyup.speckey" + this.chart.id, null)
+    .on("blur.speckey" + this.chart.id, null);
   d3.select(document.body).on("mouseup.chart" + this.chart.id, null);
   // Transient slider-drag listeners, in case we are destroyed mid-drag.
   d3.select(document).on("mouseup.sliderdrag" + this.chart.id, null);
@@ -953,6 +965,8 @@ SpectrumChartD3.prototype.setLocalizations = function( input, isInitialDef ) {
     singleEscape: "Single Escape",
     doubleEscape: "Double Escape",
     eraseInRange: "Will Erase Peaks In Range",
+    eraseBackgroundInRange: "Will Erase Background Peaks In Range",
+    eraseSecondaryInRange: "Will Erase Secondary Peaks In Range",
     zoomInY: "Zoom-In on Y-axis",
     zoomOutY: "Zoom-out on Y-axis",
     touchDefineRoi: "Move 2 fingers to right to define ROI",
@@ -2467,6 +2481,7 @@ SpectrumChartD3.prototype.handleVisMouseDown = function () {
       d3.select('body').style("cursor", "move");
 
       self.leftMouseDown = m;
+      self.dragSpectrumKey = self.heldSpectrumKey;
       self.origdomain = self.xScale.domain();
       self.zoominaltereddomain = false;
       self.recalibrationStartEnergy = self.xScale.invert(m[0]);
@@ -2623,7 +2638,9 @@ SpectrumChartD3.prototype.handleVisMouseUp = function () {
             self.mouseDownRoi = null;
           }
           
-          self.WtEmit(self.chart.id, {name: 'doubleclicked'}, energy, count, self.currentRefLineInfoStr(), modifiers );
+          // Holding B or S fits the peak in the background or secondary spectrum, as Alt or Shift do
+          const keyBits = (self.heldSpectrumKey === 'b') ? 0x04 : ((self.heldSpectrumKey === 's') ? 0x01 : 0);
+          self.WtEmit(self.chart.id, {name: 'doubleclicked'}, energy, count, self.currentRefLineInfoStr(), modifiers | keyBits );
         } else {
           // First click - maybe there will be another
           if( !modKeyPressed )
@@ -3218,6 +3235,40 @@ SpectrumChartD3.prototype.mouseup = function () {
   }
 }
 
+/* Tracks whether B or S is held (see the constructor).  A B/S pressed during a Ctrl-drag fit or Shift-drag
+   erase also retargets that drag; with Ctrl it's then swallowed, so it can't trigger an app shortcut
+   (e.g. InterSpec's Ctrl+S Store).  Keys typed into text fields, or with Alt or Cmd, are ignored. */
+SpectrumChartD3.prototype.spectrumKeyHandler = function( isDown ){
+  const self = this;
+  return function(){
+    const ev = d3.event, key = (typeof ev.key === 'string') ? ev.key.toLowerCase() : '';
+    if( !isDown ){
+      // (macOS sends no keyup for a key released while Cmd is down, so Cmd's keyup clears it too)
+      if( (key === self.heldSpectrumKey) || (key === 'meta') )
+        self.heldSpectrumKey = null;
+      return;
+    }
+
+    const target = ev.target;
+    if( ((key !== 'b') && (key !== 's')) || ev.altKey || ev.metaKey
+        || (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) )
+      return;
+
+    self.heldSpectrumKey = key;
+    if( self.leftMouseDown && ((self.leftDragMode === 'fitPeak') || (self.leftDragMode === 'deletePeaks')) ){
+      self.dragSpectrumKey = key;
+      if( ev.ctrlKey )
+        SpectrumChartD3.stopEvent();
+    }
+  };
+};
+
+/* The spectrum type a Ctrl-drag peak fit or Shift-drag erase acts on: B -> background, S -> secondary. */
+SpectrumChartD3.prototype._dragSpectrumType = function(){
+  const k = this.dragSpectrumKey, t = this.spectrumTypes;
+  return (k === 'b') ? t.BACKGROUND : ((k === 's') ? t.SECONDARY : t.FOREGROUND);
+};
+
 SpectrumChartD3.prototype.keydown = function () {
   var self = this;
   return function() {
@@ -3324,6 +3375,7 @@ SpectrumChartD3.prototype.updateTouchesOnChart = function (touchEvent) {
 SpectrumChartD3.prototype._resetTransientPointerState = function() {
   this.leftMouseDown = null;
   this.leftDragMode = 'none';
+  this.dragSpectrumKey = null;
   this.escapeKeyPressed = false;
   this.origdomain = null;
   this.rightClickDown = null;
@@ -6399,7 +6451,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
       });
     }//if( this.rawData.spectra[i].peaks )
 
-    if( (self.leftDragMode === 'fitPeak') && self.roiBeingDrugUpdate && (spectrum.type === self.spectrumTypes.FOREGROUND) )
+    if( (self.leftDragMode === 'fitPeak') && self.roiBeingDrugUpdate && (spectrum.type === self._dragSpectrumType()) )
       draw_roi(self.roiBeingDrugUpdate,i,spectrum);
   }
 
@@ -6755,7 +6807,7 @@ SpectrumChartD3.prototype.handleMouseMovePeakFit = function() {
   // Emit the current range, at most every 2.5 seconds
   self._throttledDragEmit( 2500, function(){
     self.WtEmit(self.chart.id, {name: 'fitRoiDrag'},
-                lowerEnergy, upperEnergy, -1, false, pageX, pageY );
+                lowerEnergy, upperEnergy, -1, false, pageX, pageY, self._dragSpectrumType() );
   });
 }//handleMouseMovePeakFit
 
@@ -6838,7 +6890,8 @@ SpectrumChartD3.prototype.handleMouseUpPeakFit = function() {
     return;
   }
 
-  self.WtEmit( self.chart.id, {name: 'fitRoiDrag'}, roi.lowerEnergy, roi.upperEnergy, roi.peaks.length, true, pageX, pageY );
+  self.WtEmit( self.chart.id, {name: 'fitRoiDrag'}, roi.lowerEnergy, roi.upperEnergy, roi.peaks.length, true, pageX, pageY,
+               self._dragSpectrumType() );
 }
 
 /** Updates the Escape/Sum/Compton feature markers to the current mouse/touch position, removing them all if
@@ -7879,20 +7932,20 @@ SpectrumChartD3.prototype._clampMouseXToVis = function(){
     this.lastMouseMovePos[0] = this.size.width;
 };
 
-/* Emits `signal` with the energy range of the drag box `boxId`, returning whether it did (there may be no
-   box, as this runs on every mouseup/touchend). */
-SpectrumChartD3.prototype._emitBoxRange = function( boxId, signal ){
+/* Emits `signal` with the energy range of the drag box `boxId` (then any `extra` args), returning whether it
+   did (there may be no box, as this runs on every mouseup/touchend). */
+SpectrumChartD3.prototype._emitBoxRange = function( boxId, signal, ...extra ){
   const box = this.vis.select( boxId );
   if( box.empty() )
     return false;
   const r = this._boxEnergyRange( box );
-  this.WtEmit( this.chart.id, {name: signal}, r[0], r[1] );
+  this.WtEmit( this.chart.id, {name: signal}, r[0], r[1], ...extra );
   return true;
 };
 
 /* Completes a delete-peaks drag/swipe (mouse and touch) */
 SpectrumChartD3.prototype.handleMouseUpDeletePeak = function() {
-  if( this._emitBoxRange( "#deletePeaksBox", 'shiftkeydragged' ) )
+  if( this._emitBoxRange( "#deletePeaksBox", 'shiftkeydragged', this._dragSpectrumType() ) )
     this.handleCancelMouseDeletePeak();
 }
 
@@ -7921,7 +7974,9 @@ SpectrumChartD3.prototype._drawDeletePeakBox = function( boxX, boxWidth, centerL
 
   box.attr("x", boxX).attr("width", boxWidth);
 
-  text.text( (blankWhenEmpty && !(boxWidth > 0)) ? "" : self.options.txt.eraseInRange );
+  const txt = self.options.txt, k = self.dragSpectrumKey;
+  text.text( (blankWhenEmpty && !(boxWidth > 0)) ? ""
+             : ((k === 'b') ? txt.eraseBackgroundInRange : ((k === 's') ? txt.eraseSecondaryInRange : txt.eraseInRange)) );
 
   const labelOffset = centerLabel ? (0.5*text.node().getBoundingClientRect().width) : 40;
   text.attr("x", Number(box.attr("x")) + (Number(box.attr("width"))/2) - labelOffset );
