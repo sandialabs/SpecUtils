@@ -195,10 +195,7 @@ SpectrumChartD3 = function(elem, options) {
   } else {
     this.yScale = d3.scale.linear().domain([0, 100]).nice().range([0, this.size.height]).nice();
   }
-  
-  if( this.yGrid )
-    this.yGrid.scale( this.yScale );
-      
+
   /* Finds distance between two points */
   this.dist = function (a, b) {
     return Math.sqrt(Math.pow(a[0]-b[0],2) + Math.pow(a[1]-b[1],2));
@@ -234,69 +231,44 @@ SpectrumChartD3 = function(elem, options) {
     return [min,max];
   };
 
-  // Default x source used when no spectrum is passed; falls back to first template if no spectra exist.
-  this.defaultXSource = function(){
-    if( self.rawData && self.rawData.spectra && self.rawData.spectra.length )
-      return self.rawData.spectra[0].x;
-    if( self.rawData && self.rawData.templates && self.rawData.templates.length )
-      return self.rawData.templates[0].x;
-    return null;
+  // Index range of the raw channels (`spectrum.x`; default the first spectrum, else template) in view
+  const rawXSource = function(spectrum){
+    if( spectrum )
+      return spectrum.x;
+    const rd = self.rawData;
+    return self.hasSpectrumData() ? rd.spectra[0].x : (self.hasAnyData() ? rd.templates[0].x : null);
   };
-
   this.displayed_raw_start = function(spectrum){
-    if( !self.hasAnyData() )
-      return -1;
-    const xstart = self.xScale.domain()[0];
-    const bisector = self._bisecRaw;   /* numeric comparator == raw accessor */
-    const src = spectrum ? spectrum.x : self.defaultXSource();
-    if( !src ) return -1;
-    return bisector.left(src, xstart);
+    const src = self.hasAnyData() ? rawXSource(spectrum) : null;
+    return src ? self._bisecRaw.left(src, self.xScale.domain()[0]) : -1;
   };
-
   this.displayed_raw_end = function(spectrum){
-    if( !self.hasAnyData() )
-      return -1;
-    const xend = self.xScale.domain()[1];
-    const bisector = self._bisecRaw;   /* numeric comparator == raw accessor */
-    const src = spectrum ? spectrum.x : self.defaultXSource();
-    if( !src ) return -1;
-    return bisector.right(src, xend);
+    const src = self.hasAnyData() ? rawXSource(spectrum) : null;
+    return src ? self._bisecRaw.right(src, self.xScale.domain()[1]) : -1;
   };
 
+  // Index range of the displayed (rebinned) `spectrum.points` in view
   this.displayed_start = function(spectrum){
     if( !spectrum || !spectrum.points || !spectrum.points.length )
       return -1;
-    var xstart = self.xScale.domain()[0];
-    var i = 0;
-    while( i < spectrum.points.length && spectrum.points[i].x <= xstart )
-      ++i;
-    return Math.max(i - 1,0);
+    return Math.max( self._bisecX.right(spectrum.points, self.xScale.domain()[0]) - 1, 0 );
   };
-
   this.displayed_end = function(spectrum){
     if( !spectrum || !spectrum.points || !spectrum.points.length )
       return -1;
-    var xend = self.xScale.domain()[1];
-    var i = spectrum.points.length - 1;
-    while( i > 0 && spectrum.points[i].x >= xend )
-      --i;
-    return Math.min(i + 1, spectrum.points.length);
+    return Math.max( self._bisecX.left(spectrum.points, self.xScale.domain()[1]), 1 );
   };
 
   this.rebinFactor = 1;
   this.do_rebin();
 
   this.setYAxisDomain = function(){
-    if( !isNaN(self.yaxisdown) )
-      return;
-    var yaxisDomain = self.getYAxisDomain(),
-        y1 = yaxisDomain[0],
-        y0 = yaxisDomain[1];
-    this.yScale.domain([y1, y0]);
-  }
+    if( isNaN(self.yaxisdown) )
+      self.yScale.domain( self.getYAxisDomain() );
+  };
   this.setYAxisDomain();
 
-  this.yaxisdown = Math.NaN;
+  this.yaxisdown = NaN;
 
   /* Left-mouse-drag mode: captured ONCE at mousedown from the modifier-key state,
      and treated as sticky for the entire gesture. Releasing modifier keys mid-drag
@@ -416,16 +388,8 @@ SpectrumChartD3 = function(elem, options) {
     its box with a local full-range copy of xScale
   */
 
-  this.zoom = d3.behavior.zoom()
-    .x(self.xScale)
-    .y(self.yScale)
-    .on("zoom", function(){ return false; })
-    .on("zoomend", function(){ return false; })
-    ;
-
   /* Vis interactions */
   this.vis
-    .call(this.zoom)
     .on("mousedown", self.handleVisMouseDown())
     .on("mouseup", self.handleVisMouseUp())
     .on("wheel", self.handleVisWheel())
@@ -435,10 +399,6 @@ SpectrumChartD3 = function(elem, options) {
     .on("touchcancel", self.handleVisTouchCancel() )
     ;
 
-  /* Cancel d3.behavior.zoom's listeners; we use our own implementation. The ".zoom"
-     namespace-only removal clears them all: d3.v3 selection.on regex-removes every
-     "<type>.zoom" listener (^__on([^.]+)\.zoom$). */
-  this.vis.on(".zoom", null);
   /// @TODO triggering the cancel events on document.body and window is probably a bit agressive; could probably do this for just this.vis + on leave events
   d3.select(document.body)
     .on("mouseup.chart" + this.chart.id, self.handleCancelAllMouseEvents() )
@@ -531,6 +491,13 @@ SpectrumChartD3 = function(elem, options) {
   // Handle window blur (alt-tab away) to clean up mouse interactions
   d3.select(window).on("blur.chart" + this.chart.id, self.handleChartMouseLeave());
 
+  // Bold an axis' tick label while hovered
+  const boldTickText = function(){
+    if( d3.event.target.nodeName === "text" )
+      d3.select(d3.event.target).style("font-weight", "bold");
+  };
+  const unboldTickText = function(){ d3.select(this).selectAll('text').style("font-weight", null); };
+
   this.yAxis = d3.svg.axis().scale(this.yScale)
    .orient("left")
    .innerTickSize(7)
@@ -543,13 +510,8 @@ SpectrumChartD3 = function(elem, options) {
     .style("cursor", "ns-resize")
     .on("mousedown.drag",  self.yaxisDrag())
     .on("touchstart.drag", self.yaxisDrag())
-    .on("mouseover", function() { 
-      if( d3.select(d3.event.target).node().nodeName === "text" )
-        d3.select(d3.event.target).style("font-weight", "bold"); 
-     })
-    .on("mouseout",  function() { 
-      d3.select(this).selectAll('text').style("font-weight", null);
-     })
+    .on("mouseover", boldTickText)
+    .on("mouseout", unboldTickText)
     .on("dblclick", function(){ //toggle between linear and log when user double-clicks axis
       d3.event.preventDefault();
       d3.event.stopPropagation();
@@ -566,13 +528,8 @@ SpectrumChartD3 = function(elem, options) {
     .attr("class", "xaxis axis" )
     .attr("transform", "translate(0," + this.size.height + ")")
     .style("cursor", "ew-resize")
-    .on("mouseover", function() { 
-      if( d3.select(d3.event.target).node().nodeName === "text" )
-        d3.select(d3.event.target).style("font-weight", "bold"); 
-     })
-    .on("mouseout",  function() { 
-      d3.select(this).selectAll('text').style("font-weight", null);
-     })
+    .on("mouseover", boldTickText)
+    .on("mouseout", unboldTickText)
     .on("mousedown.drag",  self.xaxisDrag())
     .on("touchstart.drag", self.xaxisDrag())
     .call(this.xAxis)
@@ -671,17 +628,7 @@ SpectrumChartD3 = function(elem, options) {
   if( this.options.gridy )
     this.setGridY(this.options.gridy,true);
 
-  this.vis.on("mouseout", function(){
-    if( self.currentKineticRefLine ){
-      self.currentKineticRefLine = null;
-      self.candidateKineticRefLines = [];
-      self.currentKineticRefLineIndex = 0;
-      self.lastKineticTapPos = null;
-      self.stopKineticRefLineCycling();
-      self.drawRefGammaLines();
-      self.updateKineticRefLineCandidateDisplay();
-    }
-  });
+  this.vis.on("mouseout", function(){ self._clearKineticRefLine(); });
   
   // Initialize kinetic reference line cycling properties
   this.candidateKineticRefLines = [];
@@ -756,7 +703,7 @@ SpectrumChartD3.prototype._txtToVisCoords = function( svgCtm, visCtmInv, x, y ){
  * event: object naming the signal (and JS event/target)
  * Remaining arguments are passed through to Wt.emit.
  */
-SpectrumChartD3.prototype.WtEmit = function(elem, event) {
+SpectrumChartD3.prototype.WtEmit = function(elem, event, ...args) {
   if (!window.Wt) {
     console.warn('Wt not found! Canceling "' + event.name + '" emit function...');
     return;
@@ -765,43 +712,38 @@ SpectrumChartD3.prototype.WtEmit = function(elem, event) {
   if( this.options.noEventsToServer )
     return;
 
-  var args = Array.prototype.slice.call(arguments, SpectrumChartD3.prototype.WtEmit.length);
-  Wt.emit.apply(Wt, [elem, event].concat(args));
+  Wt.emit(elem, event, ...args);
 }
 
 /* Removes and nulls the elements stored on `this` under the given names. */
-SpectrumChartD3.prototype.deleteAndNullifyElements = function(elementRefs) {
-  for (var i = 0; i < elementRefs.length; i++) {
-    var ref = elementRefs[i];
-    if (ref.element && this[ref.element]) {
-      this[ref.element].remove();
-      this[ref.element] = null;
+SpectrumChartD3.prototype.deleteAndNullifyElements = function(...names) {
+  for( const name of names ){
+    if( this[name] ){
+      this[name].remove();
+      this[name] = null;
     }
   }
 };
 
 SpectrumChartD3.prototype.deleteTouchLine = function() {
-  this.deleteAndNullifyElements([
-    { element: 'touchLineX' },
-    { element: 'touchLineY' }
-  ]);
+  this.deleteAndNullifyElements( 'touchLineX', 'touchLineY' );
 };
 
 SpectrumChartD3.prototype.getStaticSvg = function(){
   try{
     let w = this.svg.attr("width"), h = this.svg.attr("height");
-        
+
     // Propagate the styles set on the SVG (SpectrumChartD3.css and D3SpectrumDisplayDiv::m_cssRules)
     //  into the <defs> section of the new SVG.
-    
-    function getStyle( sel ){
+
+    // A computed style property of the first element matching `sel`, or null
+    function getProp( sel, p ){
       const el = document.querySelector(sel);
-      return el ? window.getComputedStyle( el ) : null;
-    };
-    
+      return (el && window.getComputedStyle( el )[p]) || null;
+    }
+
     function getSvgFill( sel ){
-      let style = getStyle( sel );
-      let fill = style && style.fill ? style.fill : "";
+      let fill = getProp( sel, 'fill' ) || "";
       let comps = fill.match(/\d+/g);
       if( (comps && (comps.reduce( function(a,b){ return parseFloat(a) + parseFloat(b); }) > 0.01))
          || (fill.length > 2 && fill.substring(0,1)=='#') )
@@ -809,10 +751,9 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
       return null;
     };
     
-    function getStroke( sel ){ const s = getStyle(sel); return s && s.stroke ? s.stroke : null; }
-    
-    const domstyle = getStyle( '.Wt-domRoot' );
-    let dombackground = domstyle && domstyle.backgroundColor ? domstyle.backgroundColor : null; //ex "rgb(44, 45, 48)", or "rgba(0, 0, 0, 0)"
+    const getStroke = (sel) => getProp( sel, 'stroke' );
+
+    let dombackground = getProp( '.Wt-domRoot', 'backgroundColor' ); //ex "rgb(44, 45, 48)", or "rgba(0, 0, 0, 0)"
     
     // Treat a transparent or near-zero dom background as "not set".
     if( dombackground ) {
@@ -823,19 +764,13 @@ SpectrumChartD3.prototype.getStaticSvg = function(){
       dombackground = null;
     }
     
-    const svgstyle = getStyle('#' + this.chart.id + ' > svg');
-    const svgback = svgstyle && svgstyle.background ? svgstyle.background : dombackground;
+    const svgback = getProp( '#' + this.chart.id + ' > svg', 'background' ) || dombackground;
     const chartAreaFill = getSvgFill('#chartarea' + this.chart.id);
-    const legStyle = getStyle( '.legend' );
-    const legFontSize = legStyle && legStyle.fontSize ? legStyle.fontSize : null;
-    const legColor = legStyle && legStyle.color ? legStyle.color : null;
-    
-    const legBackStyle = getStyle( '.legendBack' );
-    const legBackFill = legBackStyle && legBackStyle.fill ? legBackStyle.fill : null;
+    const legFontSize = getProp( '.legend', 'fontSize' );
+    const legColor = getProp( '.legend', 'color' );
+    const legBackFill = getProp( '.legendBack', 'fill' );
     const legBackStroke = getStroke( '.legendBack' );
-    
-    const axisStyle = getStyle( '.xaxis' );
-    const axisFill = axisStyle && axisStyle.fill ? axisStyle.fill : null;
+    const axisFill = getProp( '.xaxis', 'fill' );
     
     const tickStroke = getStroke( '.xaxis > .tick > line' );
     const gridTickStroke = getStroke( '.xgrid > .tick' );
@@ -958,12 +893,7 @@ SpectrumChartD3.prototype.do_rebin = function() {
         lastRaw = spectrum.x.length;
 
       for( var i = firstRaw; i < lastRaw; i += newRebin ){
-        let thisdata = { x: 0, y: 0 };
-        if (i >= spectrum.x.length)
-          thisdata.x = spectrum.x[spectrum.x.length-1];
-        else
-          thisdata.x = spectrum.x[i];
-
+        const thisdata = { x: spectrum.x[Math.min(i, spectrum.x.length-1)], y: 0 };
         for( let j = 0; (j < newRebin) && ((i+j) < spectrum.y.length); ++j )
           thisdata.y += spectrum.y[i+j];
         thisdata.y *= sf;
@@ -1058,11 +988,8 @@ SpectrumChartD3.prototype.setLocalizations = function( input, isInitialDef ) {
   if( input.hasOwnProperty("yAxisTitle") || input.hasOwnProperty("yAxisTitleMulti") )
     self.updateYAxisTitleText();
 
-  if( !notDefined )
-  {
-    self.updateLegend();   /* legend text (live/real/dead time, scaled-by, ...) uses options.txt */
-    self.handleResize( false );
-  }
+  self.updateLegend();   // legend text (live/real/dead time, scaled-by, ...) uses options.txt
+  self.handleResize( false );
 }//SpectrumChartD3.prototype.setLocalizations = ...
 
 /** Adds, or replaces the first spectrum of the passed-in type with, the new spectrum data. */
@@ -1075,8 +1002,7 @@ SpectrumChartD3.prototype.setSpectrumData = function( spectrumData, resetdomain,
   if (!self.rawData) self.rawData = { updateTime: spectrumData.updateTime, spectra: [] };
   if (!self.rawData.updateTime) self.rawData.updateTime = spectrumData.updateTime;
 
-  let spectra = self.rawData.spectra;
-  let index = -1;
+  const spectra = self.rawData.spectra;
   spectrumData = spectrumData.spectra[0];
 
   if (typeof id !== 'undefined') spectrumData.id = id;
@@ -1084,18 +1010,11 @@ SpectrumChartD3.prototype.setSpectrumData = function( spectrumData, resetdomain,
 
   if (backgroundID) spectrumData.backgroundID = backgroundID;
 
-  for (let i = 0; i < spectra.length; i++) {
-    if (spectra[i].type === spectrumType) {
-      index = i;
-      break;
-    }
-  }
-
-  if (index < 0) {
+  const index = spectra.findIndex( function(s){ return s.type === spectrumType; } );
+  if (index < 0)
     spectra.push(spectrumData);
-  } else {
+  else
     spectra[index] = spectrumData;
-  }
 
   self.setData( self.rawData, resetdomain );
 }
@@ -1124,8 +1043,6 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
   //Remove all the lines for the current drawn histograms
   this.vis.selectAll(".speclinepath").remove();
   this.vis.selectAll(".templatepath").remove();
-
-  this.vis.selectAll('path.line').remove();
   if (this.sliderChart) this.sliderChart.selectAll('.sliderLine').remove();
 
   this.rawData = null;
@@ -1183,16 +1100,12 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
   }
 
   var maxYScaleFactor = 0.1;
-  for (var i = 0; i < this.rawData.spectra.length; ++i)
-    this.rawData.spectra[i].dataSum = 0;
+  const sum = (y) => (y || []).reduce( (a, b) => a + b, 0 );
 
   // Create stacked-template <path> elements first so they sit UNDER the spectrum lines in z-order
   // (SVG paint order = DOM order). Filled with template.lineColor; stroke disabled.
   this.rawData.templates.forEach( function(template,i){
-    template.dataSum = 0;
-    if( template.y && template.y.length ){
-      for( var j = 0; j < template.y.length; ++j ) template.dataSum += template.y[j];
-    }
+    template.dataSum = sum( template.y );
     const fill = (template.lineColor && template.lineColor.length) ? template.lineColor : "#888888";
     self.chartBody.append("path")
       .attr("id", "templatepath" + i)
@@ -1220,10 +1133,8 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
   for( let ind = 0; ind < drawindexes.length; ++ind ) {
     let i = drawindexes[ind];
     var spectrum = data.spectra[i];
+    spectrum.dataSum = sum( spectrum.y );
     if (spectrum.y.length) {
-      for (var j = 0; j < spectrum.y.length; ++j) {
-        spectrum.dataSum += spectrum.y[j];
-      }
       this['line' + i] = d3.svg.line()
         .interpolate("step-after")
         .x( function(d){ return self.xScale(d.x); })
@@ -1265,20 +1176,15 @@ SpectrumChartD3.prototype.setData = function( data, resetdomain ) {
 
 /** Sets (replacing any existing) the ROIs, e.g. [{...},{...}], of the first spectrum of spectrumType. */
 SpectrumChartD3.prototype.setRoiData = function( peak_data, spectrumType ) {
-  let self = this;
-  let hasset = false;
-  
   if( !this.hasSpectrumData() )
     return;
 
-  this.rawData.spectra.forEach( function(spectrum) {
-    if( hasset || !spectrum || spectrum.type !== spectrumType )
-      return;
-    self.handleCancelRoiDrag();
+  const spectrum = this.rawData.spectra.find( function(s){ return s && (s.type === spectrumType); } );
+  if( spectrum ){
+    this.handleCancelRoiDrag();
     spectrum.peaks = peak_data;
-    hasset = true;
-  } );
-  
+  }
+
   this.redraw()();
 };
 
@@ -1289,20 +1195,17 @@ SpectrumChartD3.prototype.update = function() {
   if( !self.hasAnyData() )
     return;
 
-  if( this.rawData.spectra ){
-    this.rawData.spectra.forEach(function(spectrum, i) {
-      const line = self.vis.select("#spectrumline"+i);
+  this.rawData.spectra.forEach(function(spectrum, i) {
+    const line = self.vis.select("#spectrumline"+i);
 
-      if (spectrum.type === self.spectrumTypes.BACKGROUND) {
-        line.attr('visibility', self.options.backgroundSubtract ? 'hidden' : 'visible');
-        if (self.options.backgroundSubtract) return;
-      }
+    if (spectrum.type === self.spectrumTypes.BACKGROUND) {
+      line.attr('visibility', self.options.backgroundSubtract ? 'hidden' : 'visible');
+      if (self.options.backgroundSubtract) return;
+    }
 
-      const key = self.options.backgroundSubtract && ('bgsubtractpoints' in self.rawData.spectra[i]) ? 'bgsubtractpoints' : 'points';
-
-      line.attr("d", self['line'+i](self.rawData.spectra[i][key]));
-    });
-  }
+    const key = self.options.backgroundSubtract && ('bgsubtractpoints' in spectrum) ? 'bgsubtractpoints' : 'points';
+    line.attr("d", self['line'+i](spectrum[key]));
+  });
 
   if (d3.event && d3.event.keyCode) {
     d3.event.preventDefault();
@@ -1312,11 +1215,8 @@ SpectrumChartD3.prototype.update = function() {
 
 /** Step-after value of `points` at energy xVal: the y of the rightmost point with x <= xVal. */
 SpectrumChartD3.prototype._templateLookupStepAfter = function( points, xVal ){
-  if( !points || !points.length ) return 0;
-  let idx = this._bisecX.right(points, xVal) - 1;
-  if( idx < 0 ) return 0;
-  if( idx >= points.length ) idx = points.length - 1;
-  return points[idx].y;
+  const idx = points ? (this._bisecX.right(points, xVal) - 1) : -1;
+  return (idx < 0) ? 0 : points[idx].y;
 };
 
 /** Sum of step-after lookups across an array of layers at xVal. */
@@ -1335,6 +1235,12 @@ SpectrumChartD3.prototype.drawTemplates = function() {
   if( !self.rawData || !self.rawData.templates || !self.rawData.templates.length )
     return;
   const templates = self.rawData.templates;
+  const ypx = function(y){ const v = self.yScale(y); return isFinite(v) ? v : 0; };
+  const area = d3.svg.area()
+    .interpolate("step-after")
+    .x( function(d){ return self.xScale(d.x); } )
+    .y0( function(d){ return ypx(d._tplBase); } )
+    .y1( function(d){ return ypx(d._tplBase + d.y); } );
 
   // Per-point baseline cached on each datum as `_tplBase` (shared by y0 and y1); rewritten every
   // redraw, as x-zoom (which doesn't change `points`) or the layers below may have changed.
@@ -1347,18 +1253,6 @@ SpectrumChartD3.prototype.drawTemplates = function() {
     const below = templates.slice(0, i);
     for( let pi = 0; pi < t.points.length; ++pi )
       t.points[pi]._tplBase = self._templateBaselineAt(below, t.points[pi].x);
-
-    const area = d3.svg.area()
-      .interpolate("step-after")
-      .x( function(d){ return self.xScale(d.x); } )
-      .y0( function(d){
-        const y = self.yScale(d._tplBase);
-        return isFinite(y) ? y : 0;
-      })
-      .y1( function(d){
-        const y = self.yScale(d._tplBase + d.y);
-        return isFinite(y) ? y : 0;
-      });
     self.vis.select("#templatepath" + i).attr("d", area(t.points));
   }
 };
@@ -1394,8 +1288,6 @@ SpectrumChartD3.prototype.redraw = function() {
 
     self.drawTemplates();
     self.update();
-
-    self.yAxisZoomedOutFully = true;
   }
 }
 
@@ -1432,7 +1324,7 @@ SpectrumChartD3.prototype.calcLeftPadding = function( updategeom ){
 
 /* Sets the title of the graph */
 SpectrumChartD3.prototype.setTitle = function(title,dontRedraw) {
-  if( (title == null || typeof title !== 'string') || title.length === 0 ){
+  if( (typeof title !== 'string') || title.length === 0 ){
     this.options.txt.title = null;
     this.svg.select('.title').remove();
   } else {
@@ -1463,7 +1355,7 @@ SpectrumChartD3.prototype.setXAxisTitle = function(title, dontResize) {
   self.svg.select('.xaxistitle').remove();
   self.xaxistitle = null;
 
-  if( (title == null || typeof title !== 'string') || title.length === 0 )
+  if( (typeof title !== 'string') || title.length === 0 )
     return;
   
   let handleClick = function(){
@@ -1668,16 +1560,7 @@ SpectrumChartD3.prototype._clampXRangeToData = function( x0, x1, minx, maxx ){
 
 SpectrumChartD3.prototype.handlePanChart = function () {
   var self = this;
-
-  var minx, maxx, bounds;
-  if( !self.hasSpectrumData() ){
-    minx = 0;
-    maxx = 3000;
-  }else {
-    bounds = self.min_max_x_values();
-    minx = bounds[0];
-    maxx = bounds[1];
-  }
+  const bounds = self.hasSpectrumData() ? self.min_max_x_values() : [0, 3000];
 
   self.is_panning = true;
 
@@ -1687,12 +1570,11 @@ SpectrumChartD3.prototype.handlePanChart = function () {
   if (!docMouse || !self.rightClickDown)
     return;
 
-
   const delta = docMouse[0] - self.rightClickDown[0];
   const range = self.xScale.range();
   const newX = self._clampXRangeToData( self.xScale.invert( range[0] - delta ),
                                         self.xScale.invert( range[1] - delta ),
-                                        minx, maxx );
+                                        bounds[0], bounds[1] );
 
   self.setXAxisRange(newX[0], newX[1], false, true);
   self.redraw()();
@@ -1810,69 +1692,46 @@ SpectrumChartD3.prototype._resetSliderDragFlags = function(){
  All are pure reads of this.touchesOnChart (page-coordinate start/current positions)
  and this.leftDragMode; called from the touch-move dispatch every touchmove. */
 
+/* The two touches on the chart, as [t1, t2], or null if there aren't exactly two. */
+SpectrumChartD3.prototype._twoTouches = function(){
+  const keys = this.touchesOnChart ? Object.keys(this.touchesOnChart) : [];
+  return (keys.length === 2) ? [this.touchesOnChart[keys[0]], this.touchesOnChart[keys[1]]] : null;
+};
+
 /* Delete-peak = two fingers, separated horizontally, swiping upward together. */
 SpectrumChartD3.prototype._isDeletePeakSwipe = function(){
-  if (!this.touchesOnChart)
+  const tt = this._twoTouches();
+  if( !tt )
     return false;
 
-  var keys = Object.keys(this.touchesOnChart);
-
-  if (keys.length !== 2)
+  const [t1, t2] = tt, maxDyDiff = 15, minDxDiff = 25;
+  const dy1 = t1.startY - t1.pageY, dy2 = t2.startY - t2.pageY;
+  if( (Math.abs(dy2 - dy1) > maxDyDiff) || (Math.abs(t1.pageX - t2.pageX) < minDxDiff) )
     return false;
 
-  var maxDyDiff = 15,
-      minDxDiff = 25;
-
-  var t1 = this.touchesOnChart[keys[0]],
-      t2 = this.touchesOnChart[keys[1]];
-
-  var dy1 = t1.startY - t1.pageY,
-      dy2 = t2.startY - t2.pageY,
-      dyDiff = Math.abs(dy2 - dy1);
-
-  if (dyDiff > maxDyDiff || Math.abs(t1.pageX - t2.pageX) < minDxDiff)
-    return false;
-
-  var dy = Math.min(dy1,dy2),
-      dx1 = t1.startX - t1.pageX,
-      dx2 = t2.startX - t2.pageX,
-      dx = Math.abs(dx1 - dx2);
-
+  const dy = Math.min(dy1, dy2), dx = Math.abs( (t1.startX - t1.pageX) - (t2.startX - t2.pageX) );
   return dy > dx && dy > maxDyDiff;
 };
 
 /* Peak-fit = two fingers roughly level, constant separation, moving right; latches once started. */
 SpectrumChartD3.prototype._isControlDragSwipe = function(){
-  if (!this.touchesOnChart)
+  if( !this.touchesOnChart )
     return false;
 
   if( this.leftDragMode === 'fitPeak' )   /* the latch */
     return true;
 
-  var keys = Object.keys(this.touchesOnChart);
-
-  if (keys.length !== 2)
+  const tt = this._twoTouches();
+  if( !tt )
     return false;
 
-  var t1 = this.touchesOnChart[keys[0]],
-      t2 = this.touchesOnChart[keys[1]];
-
-  if (t1.startX > t1.pageX || t2.startX > t2.pageX)
+  const [t1, t2] = tt;
+  if( (t1.startX > t1.pageX) || (t2.startX > t2.pageX)
+      || ![t1.startX, t1.pageX, t2.startX, t2.pageX, t1.startY, t1.pageY, t2.startY, t2.pageY].every( isFinite ) )
     return false;
 
-  if( !isFinite(t1.startX) || !isFinite(t1.pageX)
-  || !isFinite(t2.startX) || !isFinite(t2.pageX)
-  || !isFinite(t1.startY) || !isFinite(t1.pageY)
-  || !isFinite(t2.startY) || !isFinite(t2.pageY) )
-    return false;
-
-  var startdx = t1.startX - t2.startX,
-      nowdx = t1.pageX - t2.pageX,
-      yavrg = 0.5*(t1.startY+t2.startY);
-
-  if( Math.abs(yavrg-t1.pageY) > 20 ||
-      Math.abs(yavrg-t2.pageY) > 20 ||
-      Math.abs(startdx-nowdx) > 20 )
+  const startdx = t1.startX - t2.startX, nowdx = t1.pageX - t2.pageX, yavrg = 0.5*(t1.startY + t2.startY);
+  if( (Math.abs(yavrg - t1.pageY) > 20) || (Math.abs(yavrg - t2.pageY) > 20) || (Math.abs(startdx - nowdx) > 20) )
     return false;
 
   return Math.abs(t1.pageX - t1.startX) > 30;
@@ -1880,42 +1739,27 @@ SpectrumChartD3.prototype._isControlDragSwipe = function(){
 
 /* Count-gammas = two fingers stacked vertically (~same x), swiping right together. */
 SpectrumChartD3.prototype._isAltShiftSwipe = function(){
-  if( !this.touchesOnChart )
+  const tt = this._twoTouches();
+  if( !tt )
     return false;
 
-  var keys = Object.keys(this.touchesOnChart);
-
-  if( keys.length !== 2 )
+  const [t1, t2] = tt;
+  if( (Math.abs(t1.startX - t2.startX) > 20) || (Math.abs(t1.pageX - t2.pageX) > 25) )
     return false;
 
-  var t1 = this.touchesOnChart[keys[0]],
-      t2 = this.touchesOnChart[keys[1]];
-
-  if( Math.abs(t1.startX-t2.startX) > 20 || Math.abs(t1.pageX-t2.pageX) > 25 )
-    return false;
-
-  return ( (t1.pageX - t1.startX) > 30 );
+  return (t1.pageX - t1.startX) > 30;
 };
 
 /* Pinch zoom: y_direction=false -> horizontal separation change (zoom x);
    y_direction=true -> vertical separation change (zoom y). */
 SpectrumChartD3.prototype._isZoomInPinch = function( y_direction ){
-  if (!this.touchesOnChart)
+  const tt = this._twoTouches();
+  if( !tt )
     return false;
 
-  const keys = Object.keys(this.touchesOnChart);
-
-  if (keys.length !== 2)
-    return false;
-
-  var touch1 = this.touchesOnChart[keys[0]];
-  var touch2 = this.touchesOnChart[keys[1]];
-  var adx1 = Math.abs( touch1.startX - touch2.startX );
-  var adx2 = Math.abs( touch1.pageX  - touch2.pageX );
-  var ady1 = Math.abs( touch1.startY - touch2.startY );
-  var ady2 = Math.abs( touch1.pageY  - touch2.pageY );
-  var ddx = Math.abs( adx2 - adx1 );
-  var ddy = Math.abs( ady2 - ady1 );
+  const [t1, t2] = tt;
+  const ddx = Math.abs( Math.abs(t1.pageX - t2.pageX) - Math.abs(t1.startX - t2.startX) );
+  const ddy = Math.abs( Math.abs(t1.pageY - t2.pageY) - Math.abs(t1.startY - t2.startY) );
 
   if( y_direction )
     return ((ddx < 0.5*ddy) && (ddy > 20));
@@ -2523,16 +2367,7 @@ SpectrumChartD3.prototype.handleChartMouseLeave = function() {
       }
 
       self.updateFeatureMarkers(-1);
-      
-      if( self.currentKineticRefLine ){
-        self.currentKineticRefLine = null;
-        self.candidateKineticRefLines = [];
-        self.currentKineticRefLineIndex = 0;
-        self.lastKineticTapPos = null;
-        self.stopKineticRefLineCycling();
-        self.drawRefGammaLines();
-        self.updateKineticRefLineCandidateDisplay();
-      }
+      self._clearKineticRefLine();
 
       self.mousedOverRefLine = null;
       self.refLineInfo.style("display", "none");
@@ -2554,7 +2389,7 @@ SpectrumChartD3.prototype.handleChartMouseUp = function() {
 
   return function () {
     self._endXAxisDrag();
-    self.yaxisdown = Math.NaN;
+    self.yaxisdown = NaN;
     d3.select(document.body).style("cursor", "default");
 
     // A peak fit released outside the plot area (inside it, handleVisMouseUp completed it already)
@@ -3509,7 +3344,7 @@ SpectrumChartD3.prototype.mouseup = function () {
     };
     if (!isNaN(self.yaxisdown)) {
       self.redraw()();
-      self.yaxisdown = Math.NaN;
+      self.yaxisdown = NaN;
     }
 
     self._resetSliderDragFlags();
@@ -3668,7 +3503,7 @@ SpectrumChartD3.prototype.handleCancelAllMouseEvents = function() {
 
     d3.select(document.body).style("cursor", "default");
     self._endXAxisDrag();
-    self.yaxisdown = Math.NaN;
+    self.yaxisdown = NaN;
 
     self._cancelOtherMouseModes( null );   // null -> every mode
     self.handleCancelRoiDrag();
@@ -4091,15 +3926,7 @@ SpectrumChartD3.prototype.handleUpdateKineticRefLineUpdate = function( posOverri
   const m = posOverride ? posOverride : this.getMousePos();
   const badPos = (!posOverride && !this.mousePosIsValid);
   if( !this.kineticRefLines || !this.kineticRefLines.ref_lines || !this.kineticRefLines.ref_lines.length || badPos ){
-    if( this.currentKineticRefLine ){
-      this.currentKineticRefLine = null;
-      this.candidateKineticRefLines = [];
-      this.currentKineticRefLineIndex = 0;
-      this.lastKineticTapPos = null;
-      this.stopKineticRefLineCycling();
-      this.drawRefGammaLines();
-      this.updateKineticRefLineCandidateDisplay();
-    }
+    this._clearKineticRefLine();
     return;
   }//if( we dont need to draw the lines )
 
@@ -4212,6 +4039,19 @@ SpectrumChartD3.prototype.handleUpdateKineticRefLineUpdate = function( posOverri
     this.updateMouseCoordText( posOverride );
   }
 }//SpectrumChartD3.prototype.handleUpdateKineticRefLineUpdate
+
+/* Clears the kinetic reference line (and its candidates), if one is shown. */
+SpectrumChartD3.prototype._clearKineticRefLine = function(){
+  if( !this.currentKineticRefLine )
+    return;
+  this.currentKineticRefLine = null;
+  this.candidateKineticRefLines = [];
+  this.currentKineticRefLineIndex = 0;
+  this.lastKineticTapPos = null;
+  this.stopKineticRefLineCycling();
+  this.drawRefGammaLines();
+  this.updateKineticRefLineCandidateDisplay();
+};
 
 SpectrumChartD3.prototype.startKineticRefLineCycling = function(){
   const self = this;
@@ -7670,10 +7510,9 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
   
   /* Deletes a feature-marker's line + measurement label (+ optional text) by id prefix. */
   function deleteMarker( prefix, hasText ) {
-    const els = [ { element: prefix }, { element: prefix + 'Meas' } ];
+    self.deleteAndNullifyElements( prefix, prefix + 'Meas' );
     if( hasText )
-      els.push( { element: prefix + 'Text' } );
-    self.deleteAndNullifyElements( els );
+      self.deleteAndNullifyElements( prefix + 'Text' );
   }
 
   const escapeMarkerSuffix = { single: 'singleEscape', double: 'doubleEscape',
@@ -7830,11 +7669,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
           .attr( "y", self.size.height/5.3 + linehspace)
           .text( energyVal.toFixed(1) + " keV" );
       } else if (energyVal < 0 && self[keyPrefix] && self[textKey] && self[measKey]) {
-        self.deleteAndNullifyElements([
-          { element: keyPrefix },
-          { element: textKey },
-          { element: measKey }
-        ]);
+        self.deleteAndNullifyElements( keyPrefix, textKey, measKey );
       } else if (self[keyPrefix]) {
         self[keyPrefix]
           .attr("y2", self.size.height)
@@ -7943,11 +7778,7 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
     var comptonEdgeOutOfBounds = compEdgePix < 0  || compEdgePix > xmax ;
 
     if( !self.options.showComptonEdge || cursorIsOutOfBounds || comptonEdgeOutOfBounds || self.dragging_plot ) {
-      self.deleteAndNullifyElements([
-        { element: 'comptonEdge' },
-        { element: 'comptonEdgeText' },
-        { element: 'comptonEdgeMeas' }
-      ]);
+      self.deleteAndNullifyElements( 'comptonEdge', 'comptonEdgeText', 'comptonEdgeMeas' );
       updateMouseEdge();
       return;
     }
@@ -8465,8 +8296,6 @@ SpectrumChartD3.prototype.redrawYAxis = function() {
 
     self.drawTemplates();
     self.update();
-
-    self.yAxisZoomedOutFully = false;
   }
 }
 
