@@ -2575,6 +2575,10 @@ SpectrumChartD3.prototype.handleChartMouseUp = function() {
     self.yaxisdown = Math.NaN;
     d3.select(document.body).style("cursor", "default");
 
+    // A peak fit released outside the plot area (inside it, handleVisMouseUp completed it already)
+    if( self.leftDragMode === 'fitPeak' )
+      self.handleMouseUpPeakFit();
+
     self.handleMouseUpDeletePeak();
     self.handleMouseUpZoomX();
     self.handleMouseUpDraggingRoi( self.getMousePos() );
