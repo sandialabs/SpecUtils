@@ -7173,12 +7173,7 @@ SpectrumChartD3.prototype.drawPeaks = function() {
 
   for (let i = 0; i < this.rawData.spectra.length; i++) {
     const spectrum = this.rawData.spectra[i];
-
-    if ((spectrum.type === self.spectrumTypes.FOREGROUND && !this.options.drawPeaksFor.FOREGROUND))
-      continue;
-    if ((spectrum.type === self.spectrumTypes.BACKGROUND && (!this.options.drawPeaksFor.BACKGROUND || this.options.backgroundSubtract)))
-      continue;
-    if ((spectrum.type === self.spectrumTypes.SECONDARY && !this.options.drawPeaksFor.SECONDARY))
+    if( !self._peaksDrawnFor( spectrum ) )
       continue;
 
     const peaks = spectrum.peaks;
@@ -7198,6 +7193,16 @@ SpectrumChartD3.prototype.drawPeaks = function() {
 
   self.drawPeakLabels( labelinfo );
 }
+
+/* Whether the peaks of `spectrum` are drawn (background peaks are hidden while subtracting it). */
+SpectrumChartD3.prototype._peaksDrawnFor = function( spectrum ){
+  const t = spectrum.type, T = this.spectrumTypes, show = this.options.drawPeaksFor;
+  if( (t === T.FOREGROUND) || (t === T.SECONDARY) )
+    return !!show[t];
+  if( t === T.BACKGROUND )
+    return !!show[t] && !this.options.backgroundSubtract;
+  return true;
+};
 
 SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
   const self = this;
@@ -9490,7 +9495,7 @@ SpectrumChartD3.prototype.updatePeakInfo = function( posOverride ) {
   }//if( this.highlightedPeak && this.peakPaths )
 
   this.rawData.spectra.forEach(function(spectrum, i) {
-    if( resultROI || !spectrum.peaks || !self.options.drawPeaksFor[spectrum.type] )
+    if( resultROI || !spectrum.peaks || !self._peaksDrawnFor(spectrum) )
       return;
 
     spectrum.peaks.forEach(function(peak, j) {
@@ -9845,7 +9850,7 @@ SpectrumChartD3.prototype.areMultipleSpectrumPeaksShown = function() {
   let numberOfSpectraPeaks = 0;
 
   self.rawData.spectra.forEach(function(spectrum) {
-    if (spectrum.peaks && spectrum.peaks.length && self.options.drawPeaksFor[spectrum.type])
+    if (spectrum.peaks && spectrum.peaks.length && self._peaksDrawnFor(spectrum))
       numberOfSpectraPeaks++;
   });
 
