@@ -8037,7 +8037,6 @@ SpectrumChartD3.prototype.updateGammaSum = function() {
   // The box spans the drag, with the text lines below its center
   const boxX = (nowx_px < startx_px) ? nowx_px : startx_px, boxWidth = Math.abs( startx_px - nowx_px );
   const textX = boxX + boxWidth/2 - 30;
-  var ypos = self.size.height/2 + 15;   // y-position of the next text line
 
   var countGammasBox = self.vis.select("#countGammasBox"),
   countGammasText = self.vis.select("#countGammasText"),
@@ -8058,8 +8057,10 @@ SpectrumChartD3.prototype.updateGammaSum = function() {
     countGammaRangeText = self.vis.append("text")
       .attr("id", "countGammaRangeText")
       .attr("class", "countGammasText")
-      .attr("y", ypos);
+      .attr("y", self.size.height/2 + 15);
   }
+  // y of the next text line; from the box, whose height is fixed when the drag starts, as are the lines' y
+  var ypos = Number(countGammasBox.attr("height"))/2 + 15;
   countGammasBox.attr("x", boxX).attr("width", boxWidth);
   countGammasText.attr("x", textX);
   countGammaRangeText.attr("x", textX)
