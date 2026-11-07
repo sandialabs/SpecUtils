@@ -309,27 +309,32 @@ SpectrumChartD3 = function(elem, options) {
   |  |                          this.chart <div>                            |  |
   |  |   ________________________________________________________________   |  |
   |  |  |                        this.svg <svg>                          |  |  |
-  |  |  |  svg-level <g>/<text> siblings of vis (in the padding gap or   |  |  |
-  |  |  |  overlaid): chart title, x/y-axis titles, this.legend,         |  |  |
-  |  |  |  this.scalerWidget (y-scale sliders), this.sliderChart         |  |  |
-  |  |  |  (x-axis slider: slider-plot rect, sliderChartBody with        |  |  |
-  |  |  |  sliderLine{i} paths, sliderBox, drag handles, close btn)      |  |  |
+  |  |  |  svg-level siblings of vis (in the padding gap or overlaid):   |  |  |
+  |  |  |  chart title, this.legend, this.scalerWidget (y-scale          |  |  |
+  |  |  |  sliders), this.sliderChart (x-axis slider: slider-plot rect,  |  |  |
+  |  |  |  sliderChartBody with sliderLine{i} paths, sliderBox, edge     |  |  |
+  |  |  |  handles + grip lines, close btn)                              |  |  |
   |  |  |   ____________________________________________________________ |  |  |
   |  |  |  | this.vis <g>  (the plot area), children in paint order:    ||  |  |
   |  |  |  |   this.plot bg rect ("chartarea")                          ||  |  |
+  |  |  |  |   yAxisBody / xAxisBody <g> (tick marks + numbers; the     ||  |  |
+  |  |  |  |     x-axis title is in xAxisBody)                          ||  |  |
   |  |  |  |   this.chartBody <g, clipped>: spectrumline{i} +           ||  |  |
   |  |  |  |     templatepath{i} paths                                  ||  |  |
   |  |  |  |   this.peakVis <g, clipped>: peak fill/outline/continuum   ||  |  |
   |  |  |  |     paths (each carrying node.__peakInfo) + peak labels    ||  |  |
-  |  |  |  |   yAxisBody / xAxisBody <g> (tick marks + numbers)         ||  |  |
+  |  |  |  |   this.yAxisTitle <g>                                      ||  |  |
   |  |  |  |   xGridBody / yGridBody <g> (when grid on; inserted        ||  |  |
   |  |  |  |     before .refLineInfo)                                   ||  |  |
-  |  |  |  |   g.ref reference lines, this.refLineInfo readout          ||  |  |
-  |  |  |  |   this.mouseInfo (bottom-right readout), this.peakInfo     ||  |  |
-  |  |  |  |   transient gesture visuals: #zoomInXBox/#zoomInYBox +     ||  |  |
-  |  |  |  |     texts, #deletePeaksBox, #countGammasBox, touch lines,  ||  |  |
-  |  |  |  |     #createPeakTouch* lines, recalibration* lines/clone,   ||  |  |
-  |  |  |  |     ROI drag boxes/lines                                   ||  |  |
+  |  |  |  |   this.refLineInfo readout                                 ||  |  |
+  |  |  |  |   then everything appended as it is created (so on top):   ||  |  |
+  |  |  |  |     this.mouseInfo (bottom-right readout; re-added by      ||  |  |
+  |  |  |  |     setData), search ranges, highlight regions, g.ref      ||  |  |
+  |  |  |  |     reference lines, feature-marker lines/texts,           ||  |  |
+  |  |  |  |     this.peakInfo, and transient gesture visuals:          ||  |  |
+  |  |  |  |     #zoomInXBox/#zoomInYBox + texts, #deletePeaksBox,      ||  |  |
+  |  |  |  |     #countGammasBox, touch lines, #createPeakTouch* lines, ||  |  |
+  |  |  |  |     recalibration* lines/clone, ROI drag boxes/lines       ||  |  |
   |  |  |  |____________________________________________________________||  |  |
   |  |  |________________________________________________________________|  |  |
   |  |______________________________________________________________________|  |
@@ -350,12 +355,15 @@ SpectrumChartD3 = function(elem, options) {
               peak paths - handlers key off event.target.__peakInfo (paths
               without it, e.g. the multi-peak continuum line, are ignored)
     axis bodies + titles: mousedown.drag/touchstart.drag (axis drag-rescale),
-              dblclick / click (log-lin toggle), hover bolding
-    sliderChart parts: mousedown/touchstart/touchmove on the box + handles;
-              document-level mousemove/mouseup namespaced
+              hover bolding; y-axis dblclick and y-title click toggle log/lin,
+              x-title click toggles the slider chart
+    sliderChart parts: mousedown/touchstart/touchmove on the box + handles,
+              touchstart/touchmove on the slider chart (a touch near a box edge
+              grabs that handle); document-level mousemove/mouseup namespaced
               ".sliderdrag"+chart.id while a slider drag is active
-    scalerWidget: mousedown/touchstart per slider + document-level tracking via
-              handleMouseMoveScaleFactorSlider through the chart mousemove
+    scalerWidget: mouse/touch down/move/up on each slider's toggle; a mouse
+              drag off the toggle is tracked by the chart mousemove (via
+              handleMouseMoveScaleFactorSlider)
     chart (roi drag): mousemove.roidrag/touchmove.roidrag installed only while
               dragging a ROI edge
     document.body + window: "mouseup.chart"+id -> handleCancelAllMouseEvents
@@ -364,8 +372,8 @@ SpectrumChartD3 = function(elem, options) {
     window CAPTURE-phase safety nets: touchend/touchcancel + pointerup/
               pointercancel (Android WebView drops touchend on SVG paths); see
               chartTouchEndSafety below
-  All document/window listeners are namespaced by chart.id (multi-chart safety)
-  and removed in destroy().
+  All document/window listeners are per chart (namespaced by chart.id; the
+  capture-phase ones are per-chart handler references) and removed in destroy().
 
   Gesture dispatch: pointer gestures resolve to one of the modes in
   this._gestureModes (fitPeak/deletePeaks/countGammas/recalibrate/zoomX/zoomY);
