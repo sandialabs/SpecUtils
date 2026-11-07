@@ -5490,7 +5490,7 @@ SpectrumChartD3.prototype._hasYScaler = function( spectrum, i ) {
 
 /* Returns the spectrum currently being y-scaled by the scaler slider, or null. */
 SpectrumChartD3.prototype._adjustingSpectrum = function() {
-  if( !this.rawData || !this.rawData.spectra || this.currentlyAdjustingSpectrumScale === null )
+  if( !this.rawData || !this.rawData.spectra || this.currentlyAdjustingSpectrumScale == null )
     return null;
   return this.rawData.spectra.find( (s) => s.type == this.currentlyAdjustingSpectrumScale ) || null;
 }
