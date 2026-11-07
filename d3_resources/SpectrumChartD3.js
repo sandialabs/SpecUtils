@@ -3527,7 +3527,7 @@ SpectrumChartD3.prototype.mouseup = function () {
     }
 
     self._resetSliderDragFlags();
-    self.currentlyAdjustingSpectrumScale = null;
+    self.endYAxisScalingAction()();
   }
 }
 
