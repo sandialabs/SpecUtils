@@ -3639,9 +3639,10 @@ SpectrumChartD3.prototype.updateTouchesOnChart = function (touchEvent) {
                       self.touchesOnChart, ", touchEvent.touches", touchEvent.touches );
     }
     
+    // Keep just the active touches
     const trimmed = {};
-    for (let i = 0; i < touchEvent.changedTouches.length; ++i ) {
-      const ident = touchEvent.changedTouches[i].identifier;
+    for (let i = 0; i < touchEvent.touches.length; ++i ) {
+      const ident = touchEvent.touches[i].identifier;
       trimmed[ident] = self.touchesOnChart[ident];
     }
     self.touchesOnChart = trimmed;
