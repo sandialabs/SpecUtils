@@ -1800,6 +1800,9 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
 
     sliderMove();
     scaleFactorMove();
+    // A slider-chart drag just changed the x-range, after mousemove() above placed the feature markers
+    if( self.sliderBoxDown || self.leftDragRegionDown || self.rightDragRegionDown )
+      self.updateFeatureMarkers(-1);
 
     // Moving the mouse removes the grey lines showing where the screen was touched
     self.deleteTouchLine();
