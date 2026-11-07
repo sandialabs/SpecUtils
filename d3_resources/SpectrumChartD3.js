@@ -2571,7 +2571,7 @@ SpectrumChartD3.prototype.handleChartMouseUp = function() {
   var self = this;
 
   return function () {
-    self.xaxisdown = null;
+    self._endXAxisDrag();
     self.yaxisdown = Math.NaN;
     d3.select(document.body).style("cursor", "default");
 
@@ -3669,13 +3669,23 @@ SpectrumChartD3.prototype._resetTransientPointerState = function() {
   this.legdown = null;
 };
 
+/* Ends an x-axis label drag released outside the plot area, emitting the new range (handleVisMouseUp
+   does this for releases inside it). */
+SpectrumChartD3.prototype._endXAxisDrag = function(){
+  if( !this.xaxisdown )
+    return;
+  this.xaxisdown = null;
+  const d = this.xScale.domain();
+  this.WtEmit( this.chart.id, {name: 'xrangechanged'}, d[0], d[1], this.size.width, this.size.height, true );
+};
+
 SpectrumChartD3.prototype.handleCancelAllMouseEvents = function() {
   var self = this;
 
   return function () {
 
     d3.select(document.body).style("cursor", "default");
-    self.xaxisdown = null;
+    self._endXAxisDrag();
     self.yaxisdown = Math.NaN;
 
     self._cancelOtherMouseModes( null );   // null -> every mode
