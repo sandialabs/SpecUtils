@@ -23,7 +23,7 @@ module.exports = defineConfig({
   projects: [
     {
       name: 'mouse',
-      testMatch: /(smoke|mouse|resize|slider|peaks|fixes)\.spec\.js/,
+      testMatch: /(smoke|mouse|resize|slider|peaks|fixes|spectrum_keys)\.spec\.js/,
       use: { ...devices['Desktop Chrome'], hasTouch: false },
     },
     {
