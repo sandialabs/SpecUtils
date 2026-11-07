@@ -7174,11 +7174,9 @@ SpectrumChartD3.prototype.setHighlightRegions = function(ranges) {
 }
 
 /** -------------- Chart Animation (zoom animations, via requestAnimationFrame) -------------- */
+// The zoom animations finish even if showAnimation is turned off part way through.
 SpectrumChartD3.prototype.redrawZoomXAnimation = function(targetDomain) {
   var self = this;
-
-  if( !self.options.showAnimation )
-    return;
 
   return function() {
     if( self.currentDomain === null || targetDomain === null
@@ -7220,7 +7218,6 @@ SpectrumChartD3.prototype.redrawZoomYAnimation = function(targetDomain) {
   
   console.assert( targetDomain && targetDomain.length === 2, "Invalid targetDomain" );
   console.assert( targetDomain[0] >= targetDomain[1], "Expected targetDomain to be ordered other way" );
-  console.assert( self.options.showAnimation, "redrawZoomYAnimation shouldnt be called when options not set" );
   console.assert( self.savedDomain && self.savedDomain.length === 2, "Invalid savedDomain" );
   
   const redraw = this.redrawYAxis();
