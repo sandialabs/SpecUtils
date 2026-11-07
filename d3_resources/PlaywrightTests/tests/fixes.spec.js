@@ -129,7 +129,7 @@ test.describe('cleanup-pass fixes', () => {
     expect( ev, 'xrangechanged emitted' ).not.toBeNull();
     expect( Math.abs( ev.args[0] - dom[0] ) ).toBeLessThan( 1e-6 );
     expect( Math.abs( ev.args[1] - dom[1] ) ).toBeLessThan( 1e-6 );
-    expect( ev.args[4], 'user_action, as for a release inside the plot' ).toBe( false );
+    expect( ev.args[4], 'user_action' ).toBe( true );
   });
 
   test('peak info ignores background peaks hidden by background subtraction', async ({ chart, page }) => {
@@ -267,5 +267,29 @@ test.describe('cleanup-pass fixes', () => {
     await chart.click( 661 );
     expect( (await chart.emits( 'leftclicked' )).length ).toBe( 1 );
     expect( await chart.errors() ).toEqual( [] );
+  });
+
+  test('mouse pans, zoom-out drags and x-axis drags report a user action (InterSpec makes them undoable)', async ({ chart, page }) => {
+    const lastUserAction = async () => { const ev = await chart.lastEmit( 'xrangechanged' ); return ev ? ev.args[4] : null; };
+    await page.evaluate( () => { window.graph.setXAxisRange( 300, 600 ); window.graph.redraw()(); } );
+    await chart.reset();
+    await chart.rightDragPan( 450, 400 );
+    expect( await lastUserAction(), 'right-drag pan' ).toBe( true );
+
+    await chart.reset();
+    await chart.mouseDrag( 450, 380 );   // a leftward left-drag zooms out
+    expect( await lastUserAction(), 'zoom-out drag' ).toBe( true );
+
+    await chart.reset();
+    const lbl = await page.evaluate( () => { for( const t of document.querySelectorAll('#chart1 .xaxis g.tick text') ){
+      if( t.textContent ){ const b = t.getBoundingClientRect(); if( b.width > 0 ) return { x: b.x + b.width/2, y: b.y + b.height/2 }; } } return null; } );
+    const inPlot = await chart.client( 450, { yFrac: 0.5 } );
+    await page.mouse.move( lbl.x, lbl.y );
+    await page.mouse.down();
+    await page.mouse.move( lbl.x + 60, lbl.y, { steps: 6 } );
+    await page.mouse.move( lbl.x + 60, inPlot.y, { steps: 4 } );   // released over the plot
+    await page.mouse.up();
+    await page.waitForTimeout( 80 );
+    expect( await lastUserAction(), 'x-axis drag released in the plot' ).toBe( true );
   });
 });
