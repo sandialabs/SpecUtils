@@ -7390,10 +7390,10 @@ SpectrumChartD3.prototype.handleMouseUpZoomX = function () {
     const [mindatax, maxdatax] = self.min_max_x_values();
     let x0 = self.xScale.invert(self.leftMouseDown[0]), x1 = self.xScale.invert(endpx);
 
-    // A sub-bin selection shows exactly that bin, inset 1% on each edge
+    // A selection within one bin shows exactly that bin, inset 1% on each edge
     const rawbi = self._bisecRaw;
-    const lbin = rawbi.left(foreground.x, x0+(x1-x0));
-    if( lbin > 1 && lbin < (foreground.x.length-1) && lbin === rawbi.left(foreground.x,x1+(x1-x0)) ) {
+    const lbin = rawbi.left(foreground.x, x0);
+    if( lbin > 1 && lbin < (foreground.x.length-1) && lbin === rawbi.left(foreground.x, x1) ) {
       const p = 0.01*(foreground.x[lbin] - foreground.x[lbin-1]);
       x0 = Math.max(foreground.x[lbin-1] + p, mindatax);
       x1 = Math.min(foreground.x[lbin] - p, maxdatax);
