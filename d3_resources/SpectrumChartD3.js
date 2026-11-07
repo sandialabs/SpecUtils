@@ -2237,9 +2237,7 @@ SpectrumChartD3.prototype.showRoiDragOption = function(info, mouse_px, showBoth,
   self.roiDragBoxes[0].attr("transform", "translate(" + lpx + "," + y_middle + ")");
   self.roiDragBoxes[1].attr("transform", "translate(" + upx + "," + y_middle + ")");
   
-  d3.selectAll('.roiDragBoxLine').each( function(){
-    d3.select(this).attr("stroke", self.roiBeingDragged.color );
-  } );
+  self.vis.selectAll('.roiDragBoxLine').attr("stroke", self.roiBeingDragged.color );
       
   for( let i = 0; i < 2; ++i ){
     self.roiDragLines[i]
@@ -5624,7 +5622,7 @@ SpectrumChartD3.prototype.drawXAxisSliderChart = function() {
   }
 
   function drawDragRegionLines() {
-    d3.selectAll(".sliderDragRegionLine").remove();
+    self.sliderChart.selectAll(".sliderDragRegionLine").remove();
     
     if (!self.sliderDragLeft || !self.sliderDragRight) {
       return;
@@ -9318,10 +9316,7 @@ SpectrumChartD3.prototype.updateGammaSum = function() {
   });
   
   // Hide the text while the box is empty
-  if (Number(countGammasBox.attr("width")) == 0)
-    d3.selectAll(".countGammasText").attr("fill-opacity", 0);
-  else
-    d3.selectAll(".countGammasText").attr("fill-opacity", 1);
+  self.vis.selectAll(".countGammasText").attr("fill-opacity", (Number(countGammasBox.attr("width")) == 0) ? 0 : 1);
 }//SpectrumChartD3.prototype.updateGammaSum
 
 SpectrumChartD3.prototype.handleMouseUpCountGammas = function() {
