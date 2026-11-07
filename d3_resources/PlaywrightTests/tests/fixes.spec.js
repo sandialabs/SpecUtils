@@ -180,4 +180,53 @@ test.describe('cleanup-pass fixes', () => {
     } );
     expect( n ).toBe( 1 );
   });
+
+  test('the width reserved for y-scale sliders matches the sliders drawn', async ({ chart, page }) => {
+    const r = await page.evaluate( () => {
+      const g = window.graph, s0 = g.rawData.spectra[0];
+      const mk = (type) => ({ x: s0.x, y: s0.y, type: type, title: 'T' + type, yScaleFactor: 1 });
+      g.setShowSpectrumScaleFactorWidget( true );
+      // No foreground (the first spectrum gets no slider), and an untyped spectrum (sliders identify by type)
+      return [ [mk('SECONDARY'), mk('BACKGROUND')], [mk('FOREGROUND'), mk(undefined), mk('BACKGROUND')] ].map( (spectra) => {
+        g.setData( { spectra: spectra }, true );
+        return [ g.size.nYScalers, document.querySelectorAll('#chart1 .scalerwidget g[id$="SliderArea"]').length ];
+      } );
+    } );
+    expect( r ).toEqual( [ [1, 1], [1, 1] ] );
+  });
+
+  test('a zoom-in drag within one channel shows that channel; one across a channel edge shows the selection', async ({ chart, page }) => {
+    // Channels [a,b] and [b,c], each ~100 px wide
+    const [a, b, c] = await page.evaluate( () => {
+      const x = window.graph.rawData.spectra[0].x, k = Math.floor( x.length/3 );
+      window.graph.setXAxisRange( x[k-3], x[k+3], false, false );
+      window.graph.redraw()();
+      return [ x[k-1], x[k], x[k+1] ];
+    } );
+    const w = b - a;
+    await chart.mouseDrag( a + 0.55*w, a + 0.8*w );  // x1 + (x1 - x0) is past b
+    let dom = await chart.xDomain();
+    expect( Math.abs( dom[0] - (a + 0.01*w) ) ).toBeLessThan( 1e-6*w );
+    expect( Math.abs( dom[1] - (b - 0.01*w) ) ).toBeLessThan( 1e-6*w );
+
+    await page.evaluate( (r) => { window.graph.setXAxisRange( r[0], r[1], false, false ); window.graph.redraw()(); }, [a - 2*w, c + 2*w] );
+    await chart.mouseDrag( a + 0.8*w, b + 0.1*w );   // spans the a|b edge
+    dom = await chart.xDomain();
+    expect( Math.abs( dom[0] - (a + 0.8*w) ) ).toBeLessThan( 0.03*w );
+    expect( Math.abs( dom[1] - (b + 0.1*w) ) ).toBeLessThan( 0.03*w );
+  });
+
+  test('turning zoom animation off part way through a zoom still finishes it', async ({ chart, page }) => {
+    await page.evaluate( () => { window.graph.setAnimationDuration( 400 ); window.graph.setShowAnimation( true ); } );
+    await chart.mouseDrag( 600, 900 );   // returns ~80 ms after mouse-up, mid-animation
+    await page.evaluate( () => window.graph.setShowAnimation( false ) );
+    await page.waitForTimeout( 600 );
+    const dom = await chart.xDomain();
+    const ev = await chart.lastEmit( 'xrangechanged' );
+    expect( ev, 'xrangechanged emitted at the end' ).not.toBeNull();
+    expect( Math.abs( ev.args[0] - dom[0] ) ).toBeLessThan( 1e-6 );
+    expect( Math.abs( ev.args[1] - dom[1] ) ).toBeLessThan( 1e-6 );
+    expect( Math.abs( dom[1] - dom[0] - 300 ) ).toBeLessThan( 15 );
+    expect( await chart.errors() ).toEqual( [] );
+  });
 });

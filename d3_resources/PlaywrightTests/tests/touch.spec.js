@@ -262,3 +262,66 @@ test.describe('touch: one-finger pan amount (bounds)', () => {
     expect( await chart.errors() ).toEqual( [] );
   });
 });
+
+test.describe('touch: slider chart', () => {
+  // Viewport geometry of the slider box, with a y through its middle
+  const sliderBox = (page) => page.evaluate( () => {
+    const r = document.querySelector('#chart1 .sliderBox').getBoundingClientRect();
+    return { left: r.left, right: r.right, width: r.width, y: r.top + 0.5*r.height };
+  } );
+  // Shows the slider chart with the x-range [lo + f0*W, lo + f1*W] of the full data range
+  const showSlider = (page, f0, f1) => page.evaluate( (f) => {
+    const g = window.graph, [lo, hi] = g.min_max_x_values();
+    g.setShowXAxisSliderChart( true );
+    g.setXAxisRange( lo + f[0]*(hi - lo), lo + f[1]*(hi - lo), false, false );
+    g.redraw()();
+  }, [f0, f1] );
+  const drag = (chart, x0, x1, y) => chart._runTouch( [{ id: 0, x: x0, y: y }], [{ id: 0, x: x1, y: y }] );
+
+  test('a touch near a slider-box edge drags that edge; one mid-box drags the box', async ({ chart, page }) => {
+    await showSlider( page, 0.2, 0.5 );
+    let b = await sliderBox( page ), before = await chart.xDomain();
+    expect( b.width ).toBeGreaterThan( 100 );
+    await drag( chart, b.left + 12, b.left - 30, b.y );   // inside the box, off the narrow handle
+    let after = await chart.xDomain();
+    expect( after[0] ).toBeLessThan( before[0] );
+    expect( Math.abs( after[1] - before[1] ) ).toBeLessThan( 1e-9*before[1] );
+
+    b = await sliderBox( page ); before = after;
+    await drag( chart, b.right + 10, b.right + 40, b.y );  // just outside the box
+    after = await chart.xDomain();
+    expect( Math.abs( after[0] - before[0] ) ).toBeLessThan( 1e-9*before[1] );
+    expect( after[1] ).toBeGreaterThan( before[1] );
+
+    b = await sliderBox( page ); before = after;
+    await drag( chart, 0.5*(b.left + b.right), 0.5*(b.left + b.right) - 30, b.y );
+    after = await chart.xDomain();
+    expect( after[0] ).toBeLessThan( before[0] );
+    expect( Math.abs( (after[1] - after[0]) - (before[1] - before[0]) ) ).toBeLessThan( 1e-6*(before[1] - before[0]) );
+    expect( await chart.errors() ).toEqual( [] );
+  });
+
+  test('a narrow slider box still drags as a whole from its middle', async ({ chart, page }) => {
+    await showSlider( page, 0.4, 0.5 );
+    const w = await page.evaluate( () => 25 / window.graph.size.sliderChartWidth );   // a ~25 px box
+    await showSlider( page, 0.4, 0.4 + w );
+    const b = await sliderBox( page ), before = await chart.xDomain();
+    expect( b.width ).toBeLessThan( 40 );
+    await drag( chart, 0.5*(b.left + b.right), 0.5*(b.left + b.right) + 30, b.y );
+    const after = await chart.xDomain();
+    expect( after[0] ).toBeGreaterThan( before[0] );
+    expect( Math.abs( (after[1] - after[0]) - (before[1] - before[0]) ) ).toBeLessThan( 1e-6*(before[1] - before[0]) );
+    expect( await chart.errors() ).toEqual( [] );
+  });
+
+  test('touching the slider close button hides the slider without an error', async ({ chart, page }) => {
+    await page.evaluate( () => { window.graph.options.showSliderCloseBtn = true; } );
+    await showSlider( page, 0.2, 0.5 );
+    const c = await page.evaluate( () => { const r = document.querySelector('#chart1 .slider-close rect').getBoundingClientRect();
+                                           return { x: r.x + 0.5*r.width, y: r.y + 0.5*r.height }; } );
+    await chart._runTouch( [{ id: 0, ...c }], [{ id: 0, ...c }], 1 );
+    expect( await page.evaluate( () => !!document.querySelector('#chart1 .sliderBox') ) ).toBe( false );
+    expect( (await chart.emits( 'sliderChartDisplayed' )).map( e => e.args[0] ) ).toEqual( [false] );
+    expect( await chart.errors() ).toEqual( [] );
+  });
+});
