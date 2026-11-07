@@ -539,7 +539,6 @@ SpectrumChartD3 = function(elem, options) {
 
   this.yAxisBody = this.vis.append("g")
     .attr("class", "yaxis axis" )
-    .attr("transform", "translate(0,0)")
     .call(this.yAxis)
     .style("cursor", "ns-resize")
     .on("mousedown.drag",  self.yaxisDrag())
@@ -598,7 +597,6 @@ SpectrumChartD3 = function(elem, options) {
   const movePeakHandler = self.handleMouseMovePeak();
   self.peakVis = this.vis.append("g")
     .attr("class", "peakVis")
-    .attr("transform","translate(0,0)")
     .attr("clip-path", "url(#clip" + this.chart.id + ")")
     .on("mouseover", function(){
       const info = d3.event.target.__peakInfo;
@@ -1566,10 +1564,7 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
   this.size.height = Math.max(0, this.cy - this.padding.topComputed - this.padding.bottomComputed - this.size.sliderChartHeight);
 
   this.xScale.range([0, this.size.width]);
-  this.vis
-      .attr("width",  this.size.width)
-      .attr("height", this.size.height)
-      .attr("transform", "translate(" + this.padding.leftComputed + "," + this.padding.topComputed + ")");
+  this.vis.attr("transform", "translate(" + this.padding.leftComputed + "," + this.padding.topComputed + ")");
   this.plot
       .attr("width", this.size.width)
       .attr("height", this.size.height);
@@ -1578,13 +1573,6 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
       .attr("width", this.cx)
       .attr("height", this.cy)
       .attr("viewBox", "0 0 "+this.cx+" "+this.cy);
-
-  this.vis.attr("width", this.cx )
-          .attr("height", this.cy );
-
-  d3.select("#chartarea"+this.chart.id)
-          .attr("width", this.size.width )
-          .attr("height", this.size.height );
 
   d3.select("#clip"+ this.chart.id).select("rect")
     .attr("width", this.size.width )
@@ -1604,32 +1592,23 @@ SpectrumChartD3.prototype.handleResize = function( dontRedraw ) {
     }
   }
 
-  this.xAxisBody.attr("width", this.size.width )
-                .attr("height", this.size.height )
-                .attr("transform", "translate(0," + this.size.height + ")");
+  this.xAxisBody.attr("transform", "translate(0," + this.size.height + ")");
 
   // Prevents initially rendering the chart with all ticks displayed
   if (this.cx !== prevCx && this.cy !== prevCy)
     this.xAxisBody.call(this.xAxis);
 
-  this.yAxisBody.attr("height", this.size.height );
-  
   this.mouseInfo.attr("transform","translate(" + this.size.width + "," + this.size.height + ")");
 
   if( this.xGrid ) {
     this.xGrid.innerTickSize(-this.size.height)
-    this.xGridBody.attr("width", this.size.width )
-        .attr("height", this.size.height )
-        .attr("transform", "translate(0," + this.size.height + ")")
+    this.xGridBody.attr("transform", "translate(0," + this.size.height + ")")
         .call(this.xGrid);
   }
 
   if( this.yGrid ) {
     this.yGrid.innerTickSize(-this.size.width)
-    this.yGridBody.attr("width", this.size.width )
-        .attr("height", this.size.height )
-        .attr("transform", "translate(0,0)")
-        .call(this.yGrid);
+    this.yGridBody.call(this.yGrid);
   }
   
   // Keep the legend visible
@@ -1708,7 +1687,6 @@ SpectrumChartD3.prototype.handlePanChart = function () {
   if (!docMouse || !self.rightClickDown)
     return;
 
-  d3.select(document.body).attr("cursor", "pointer");
 
   const delta = docMouse[0] - self.rightClickDown[0];
   const range = self.xScale.range();
@@ -1997,7 +1975,6 @@ SpectrumChartD3.prototype.handleChartMouseMove = function() {
     // d3.event.buttons is missing in Safari, and .button is less consistent, so we track which button is down
     if ((d3.event.button === 0 && self.leftMouseDown)) {        // left-click drag
 
-      d3.select(document.body).attr("cursor", "move");
 
       /* Mode was captured at mousedown and is sticky (ESC clears it via handleCancelAllMouseEvents);
          a ROI drag preempts mode dispatch. */
@@ -3955,8 +3932,7 @@ SpectrumChartD3.prototype.drawRefGammaLines = function() {
     .append("line")
     .style("stroke-dasharray", dashfunc )
     .attr("stroke", stroke )
-    .attr("y1", h )
-    .attr("dx", "-0.5" );
+    .attr("y1", h );
 
   gy.exit().remove();
 
@@ -4435,8 +4411,7 @@ SpectrumChartD3.prototype.applyLineStyling = function( lineElement, linedata, is
   const strokeWidth = isHovered ? self.options.refLineWidthHover : self.options.refLineWidth;
   
   lineSelection.select("line")
-    .attr("stroke-width", strokeWidth)
-    .attr("dx", -0.5*strokeWidth);
+    .attr("stroke-width", strokeWidth);
   
   // Extension lines above the reference line
   if( self.options.refLineVerbosity >= 1 ) {
@@ -4504,8 +4479,6 @@ SpectrumChartD3.prototype.setGridX = function( onstate, dontRedraw ) {
                    .ticks( 20,"" );
 
     this.xGridBody = this.vis.insert("g", ".refLineInfo")
-        .attr("width", this.size.width )
-        .attr("height", this.size.height )
         .attr("class", "xgrid" )
         .attr("transform", "translate(0," + this.size.height + ")")
         .call( this.xGrid );
@@ -4532,10 +4505,7 @@ SpectrumChartD3.prototype.setGridY = function( onstate, dontRedraw ) {
                    .tickPadding(10);
 
     this.yGridBody = this.vis.insert("g", ".refLineInfo")
-        .attr("width", this.size.width )
-        .attr("height", this.size.height )
         .attr("class", "ygrid" )
-        .attr("transform", "translate(0,0)")
         .call( this.yGrid );
   }
 
@@ -4659,8 +4629,7 @@ SpectrumChartD3.prototype.updateMouseCoordText = function( posOverride ) {
   function cleanupRefLineHover(groupSelection, lineData) {
     const lineSelection = groupSelection.select("line");
     lineSelection
-      .attr("stroke-width", self.options.refLineWidth)
-      .attr("dx", -0.5*self.options.refLineWidth);
+      .attr("stroke-width", self.options.refLineWidth);
     
     if( self.options.refLineVerbosity >= 1 ) {
       if( lineData.major && self.options.refLineVerbosity >= 2 ) {
@@ -5308,10 +5277,7 @@ SpectrumChartD3.prototype.drawYTicks = function() {
          tick nodes keyed by value. */
       const majorYVals = {};
       ytick.forEach( function(t){ if( t.major ) majorYVals[t.value] = true; } );
-      this.yGridBody
-        .attr("width", this.size.width )
-        .attr("height", this.size.height )
-        .call( this.yGrid );
+      this.yGridBody.call( this.yGrid );
       // Minors keep the "tick" class - d3's axis join selects .tick (else ticks duplicate)
       this.yGridBody.selectAll('g.tick')
         .attr("class", function(d){ return majorYVals[d] ? "tick" : "tick minorgrid"; });
@@ -5563,8 +5529,6 @@ SpectrumChartD3.prototype.drawXTicks = function() {
     const majorXVals = {};
     xticks.forEach( function(t){ if( t.major ) majorXVals[t.value] = true; } );
     self.xGridBody
-          .attr("width", self.size.width )
-          .attr("height", self.size.height )
           .attr("transform", "translate(0," + self.size.height + ")")
           .call( self.xGrid );
     self.xGridBody.selectAll('g.tick')
@@ -6282,11 +6246,9 @@ SpectrumChartD3.prototype.drawScalerBackgroundSecondary = function() {
 
   if( !self.scalerWidget ){
     self.scalerWidget = d3.select(this.chart).select("svg").append("g")
-      .attr("class", "scalerwidget")
-      .attr("transform","translate(" + (this.cx - 20*nScalers) + "," + this.padding.topComputed + ")");
+      .attr("class", "scalerwidget");
 
-    self.scalerWidgetBody = self.scalerWidget.append("g")
-      .attr("transform","translate(0,0)");
+    self.scalerWidgetBody = self.scalerWidget.append("g");
   }
 
   // The number of scalers may have changed, so update the position
@@ -8918,7 +8880,6 @@ SpectrumChartD3.prototype.handleMouseMoveRecalibration = function() {
     recalibrationPeakVis = recalibrationG.append("g")
       .attr("id", "recalibrationPeakVis")
       .attr("class", "peakVis")
-      .attr("transform","translate(0,0)")
       .attr("clip-path", "url(#clip" + this.chart.id + ")");
 
     self.peakVis.selectAll("path").each(function() {
