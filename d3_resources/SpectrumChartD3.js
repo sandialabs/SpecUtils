@@ -7709,10 +7709,14 @@ SpectrumChartD3.prototype.updateFeatureMarkers = function( mouseDownEnergy, over
     deleteEscapePeakMarker('singleForward');
     deleteEscapePeakMarker('doubleForward');
     deleteComptonPeakLine();
+    deleteMarker( 'comptonEdge', true );
     deleteClickedSumPeakMarker();
     deleteSumPeakMarker();
     deleteLeftSumPeakMarker();
-    
+    if( self.sumPeakHelpText ){
+      self.sumPeakHelpText.remove();
+      self.sumPeakHelpText = null;
+    }
     return;
   }//if( !m )
 
