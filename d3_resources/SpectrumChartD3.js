@@ -634,7 +634,7 @@ SpectrumChartD3 = function(elem, options) {
     .on("mouseout", function(){
       const info = d3.event.target.__peakInfo;
       if( info && info.isOutline )
-        self.handleMouseOutPeak( d3.event.target, undefined, info.paths );
+        self.handleMouseOutPeak( d3.event.target );
     })
     .on("contextmenu", function(){
       /* Suppress the WebView's native long-press menu on a peak path; our touchHold
@@ -2798,7 +2798,7 @@ SpectrumChartD3.prototype.handleChartTouchEnd = function() {
 
 /** Returns the ROI path object corresponding to the coordinates passed in.
  @param coordinates the [x,y] coordinates of e.g., mouse or touch
- @returns the roi, ex. {path:..., paths:..., roi: {type:'linear',...}, lowerEnergy: 50, upperEnergy: 70, yRangePx: [12, 34], xRangePx: [40,50], color: 'black', isOutline: true, isFill: false, peak: {...}}
+ @returns the roi, ex. {path:..., roi: {type:'linear',...}, lowerEnergy: 50, upperEnergy: 70, yRangePx: [12, 34], xRangePx: [40,50], color: 'black', isOutline: true, isFill: false, peak: {...}}
  */
 SpectrumChartD3.prototype.getDrawnRoiForCoordinate = function( coordinates ){
   if( !coordinates || (coordinates.length < 2) || !this.peakPaths || !this.peakPaths.length )
@@ -7038,793 +7038,692 @@ SpectrumChartD3.prototype.handleMouseMoveScaleFactorSlider = function() {
 }
 
 
-SpectrumChartD3.prototype.offset_integral = function(roi,x0,x1){
-  var self = this;
+/** -------------- Peak and Continuum Shapes --------------
+ *  Peaks and continua are drawn from cumulative functions, F(x) = counts below energy x (up to a constant),
+ *  so the counts in any [x0,x1] are F(x1) - F(x0), exactly, for any channel width or rebinning. */
 
-  if( roi.type === 'NoOffset' || x0===x1 )
-    return 0.0;
-  
-  if( (roi.type === 'External') || roi.type.includes('FlatStep') || roi.type.includes('LinearStep') ){
-    let energies = roi.continuumEnergies;
-    let counts = roi.continuumCounts;
+/** erf(x), from Abramowitz & Stegun 7.1.26; absolute error < 1.5E-7. */
+SpectrumChartD3.erf = function( x ){
+  const sign = (x >= 0) ? 1 : -1;
+  x = Math.abs(x);
+  const t = 1.0/(1.0 + 0.3275911*x);
+  const y = 1.0 - (((((1.061405429 * t + -1.453152027) * t) + 1.421413741) * t + -0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+  return sign * y;
+};
 
-    if( !energies || !energies.length || !counts || !counts.length ){
-      console.warn( 'External continuum does not have continuumEnergies or continuumCounts' );
-      return 0.0;
+/** erfc(z), adapted from the boost implementation (Boost Software License - Version 1.0), as used in
+ InterSpec's C++; unlike 1 - erf(z), it stays accurate far into the tails (needed by the Exp*Gauss shapes).
+ */
+SpectrumChartD3.erfc = function( z ){
+  if( z < 0 )
+    return (z < -0.5) ? (2 - SpectrumChartD3.erfc( -z )) : (1 + SpectrumChartD3.erf( -z ));
+
+  if( z < 0.5 )
+    return 1 - SpectrumChartD3.erf( z );
+
+  if( z >= 28 )
+    return 0;
+
+  if( z < 1.5 )
+  {
+    const P = [ -0.098090592216281240205, 0.178114665841120341155, 0.191003695796775433986, 0.0888900368967884466578, 0.0195049001251218801359, 0.00180424538297014223957];
+    const Q = [ 1.0, 1.84759070983002217845, 1.42628004845511324508, 0.578052804889902404909, 0.12385097467900864233, 0.0113385233577001411017, 0.337511472483094676155e-5
+    ];
+
+    const zarg = z - 0.5;
+    const P_eval = ((((zarg*P[5] + P[4])*zarg + P[3])*zarg + P[2])*zarg + P[1])*zarg + P[0];
+    const Q_eval = (((((Q[6]*zarg + Q[5])*zarg + Q[4])*zarg + Q[3])*zarg + Q[2])*zarg + Q[1])*zarg + Q[0];
+    return (0.405935764312744140625 + P_eval / Q_eval) * (Math.exp(-z * z) / z);
+  }//if(z < 1.5f)
+
+  if( z < 2.5 )
+  {
+    const P = [ -0.0243500476207698441272, 0.0386540375035707201728, 0.04394818964209516296, 0.0175679436311802092299, 0.00323962406290842133584, 0.000235839115596880717416 ];
+    const Q = [ 1.0, 1.53991494948552447182, 0.982403709157920235114, 0.325732924782444448493, 0.0563921837420478160373, 0.00410369723978904575884 ];
+
+    const zarg = z - 1.5;
+    const P_eval = ((((zarg*P[5] + P[4])*zarg + P[3])*zarg + P[2])*zarg + P[1])*zarg + P[0];
+    const Q_eval = ((((zarg*Q[5] + Q[4])*zarg + Q[3])*zarg + Q[2])*zarg + Q[1])*zarg + Q[0];
+    return (0.50672817230224609375 + P_eval / Q_eval) * (Math.exp(-z * z) / z);
+  }//if( z < 2.5f
+
+  if( z < 4.5 )
+  {
+    const P = [ 0.00295276716530971662634, 0.0137384425896355332126, 0.00840807615555585383007, 0.00212825620914618649141, 0.000250269961544794627958, 0.113212406648847561139e-4 ];
+    const Q = [ 1.0, 1.04217814166938418171, 0.442597659481563127003, 0.0958492726301061423444, 0.0105982906484876531489, 0.000479411269521714493907 ];
+
+    const zarg = z - 3.5;
+    const P_eval = ((((zarg*P[5] + P[4])*zarg + P[3])*zarg + P[2])*zarg + P[1])*zarg + P[0];
+    const Q_eval = ((((zarg*Q[5] + Q[4])*zarg + Q[3])*zarg + Q[2])*zarg + Q[1])*zarg + Q[0];
+    return (0.5405750274658203125 + P_eval / Q_eval) * (Math.exp(-z * z) / z);
+  }//if( z < 4.5f )
+
+  const P = [ 0.00628057170626964891937, 0.0175389834052493308818, -0.212652252872804219852, -0.687717681153649930619, -2.5518551727311523996, -3.22729451764143718517, -2.8175401114513378771 ];
+  const Q = [ 1.0, 2.79257750980575282228, 11.0567237927800161565, 15.930646027911794143, 22.9367376522880577224, 13.5064170191802889145, 5.48409182238641741584 ];
+
+  const zarg = 1.0 / z;
+  const P_eval = (((((P[6]*zarg + P[5])*zarg + P[4])*zarg + P[3])*zarg + P[2])*zarg + P[1])*zarg + P[0];
+  const Q_eval = (((((Q[6]*zarg + Q[5])*zarg + Q[4])*zarg + Q[3])*zarg + Q[2])*zarg + Q[1])*zarg + Q[0];
+  return (0.5579090118408203125 + P_eval / Q_eval) * (Math.exp(-z * z) / z);
+};//erfc
+
+
+/** Returns `{cdf, lo, hi}` for a 'GaussianDefined' peak, or null for other types (i.e., 'DataDefined').
+ `cdf(x)` is the peak counts below energy x (up to a constant), and outside [lo,hi] the peak is negligible.
+ Per-peak constants are computed once here, so `cdf` is cheap to call for every drawn point.
+ These are the integrals of the PeakDists (C++) distributions; each is normalized by its own total, so the
+ peak area is `Amplitude` (the C++ `DistNorm` is not needed).
+ */
+SpectrumChartD3.prototype._peakShape = function( peak ){
+  if( !peak || (peak.type !== 'GaussianDefined') )
+    return null;
+
+  const erfc = SpectrumChartD3.erfc;
+  const mean = peak.Centroid[0], sigma = peak.Width[0], amp = peak.Amplitude[0];
+  const skew = (i) => peak['Skew' + i][0];
+  const t = (x) => (x - mean)/sigma;
+  const INV_SQRT2 = 0.7071067811865476, INV_SQRT_PI = 0.5641895835477563, SQRT_2PI = 2.5066282746310002;
+
+  // Skewed peaks come with the range they are visible over (`visRange`), or else we use the whole ROI.  A
+  //  Gaussian is cut where its tails fall below ~1e-4 counts per sigma: 4.6 sigma for amp=10, 7.3 for 1e8.
+  const vr = peak.visRange, gaus = !peak.skewType || (peak.skewType === 'NoSkew');
+  const nsigma = Math.max( 4, Math.sqrt( 2*Math.log( 4e3*Math.max( 1, Math.abs(amp) ) ) ) );
+  const answer = { cdf: null, lo: (vr ? vr[0] : (gaus ? (mean - nsigma*sigma) : -Infinity)),
+                              hi: (vr ? vr[1] : (gaus ? (mean + nsigma*sigma) : Infinity)) };
+
+  // Standard normal CDF; computed via erfc so differences stay accurate in both tails.
+  const phi = (z) => 0.5*erfc( -INV_SQRT2*z );
+
+  // erfcx(x) = exp(x*x)*erfc(x) for x >= 0; past x=25 uses the asymptotic series to avoid overflow.
+  const erfcx = (x) => {
+    if( x < 25.0 )
+      return Math.exp(x*x)*erfc(x);
+    const inv_2x2 = 1.0/(2.0*x*x);
+    let term = 1.0, sum = 1.0;
+    for( let k = 1; k <= 6; ++k ){ term *= -(2*k-1)*inv_2x2; sum += term; }
+    return (INV_SQRT_PI/x)*sum;
+  };
+
+  // 0.5*exp(exp_arg)*erfc(erfc_arg), overflow-safe (exp_arg - erfc_arg^2 == -0.5 z^2).
+  const tailTerm = (exp_arg, erfc_arg, z) => ((exp_arg > 87.0) || (erfc_arg > 10.0))
+                                     ? 0.5*erfcx(erfc_arg)*Math.exp(-0.5*z*z)
+                                     : 0.5*Math.exp(exp_arg)*erfc(erfc_arg);
+
+  // CDFs, in z = (x - mean)/sigma, of a Gaussian convolved with a low-side (Exp*Gauss / Bortel), or
+  //  high-side, exponential tail of scale `s` (in units of sigma).
+  const emgLow = (z, s) => (s > 0) ? (phi(z) + tailTerm( z/s + 0.5/(s*s), INV_SQRT2*(z + 1/s), z )) : phi(z);
+  const emgHigh = (z, s) => (s > 0) ? (phi(z) - tailTerm( 0.5/(s*s) - z/s, INV_SQRT2*(1/s - z), z )) : phi(z);
+
+  switch( peak.skewType )
+  {
+    case 'Bortel': case 'ExGauss': //https://doi.org/10.1016/0883-2889(87)90180-8
+    {
+      const s = skew(0)/sigma;
+      answer.cdf = (x) => amp*emgLow( t(x), s );
+      break;
     }
 
-    let bisector = self._bisecRaw;
-    let cstartind = bisector.left( energies, Math.max(roi.lowerEnergy,x0) );
-    let cendind = bisector.right( energies, Math.min(roi.upperEnergy,x1) );
-
-    // Last channel with a known upper energy (`energies` should have one more entry than `counts`)
-    const lastchan = Math.min( energies.length - 2, counts.length - 1 );
-
-    if( cstartind > lastchan )
-      return 0.0;  //shouldnt ever happen
-
-    if( cendind > lastchan )
-      cendind = lastchan;
-
-    if( cstartind > 0 && energies[cstartind] > x0 )
-      cstartind = cstartind - 1;
-    if( cendind > 0 && energies[cendind] >= x1 )
-      cendind = cendind - 1;
-
-    if( cstartind === cendind ){
-      //if( doDebug ) console.log( 'counts[' + cstartind + ']=' + counts[cstartind] );
-      return counts[cstartind] * (x1-x0) / (energies[cstartind+1] - energies[cstartind]);
+    case 'CB': //https://en.wikipedia.org/wiki/Crystal_Ball_function
+    {
+      const a = skew(0), n = skew(1);
+      const C = (n/a)*Math.exp(-0.5*a*a)/(n - 1), phiA = phi(-a), f = amp/(C + SQRT_2PI*phi(a));
+      // The power-law tail integrates to C*((n/a)/(n/a - a - z))^(n-1), for z <= -a
+      answer.cdf = (x) => {
+        const z = t(x);
+        return f*((z <= -a) ? (C*Math.pow( (n/a)/((n/a) - a - z), n - 1 )) : (C + SQRT_2PI*(phi(z) - phiA)));
+      };
+      break;
     }
 
-    //figure out fraction of first bin
-    let frac_first = (energies[cstartind+1] - x0) / (energies[cstartind+1] - energies[cstartind]);
-    let frac_last = 1.0 - (energies[cendind+1] - x1) / (energies[cendind+1] - energies[cendind]);
-    
-    let sum = frac_first*counts[cstartind] + frac_last*counts[cendind];
-    for( let i = cstartind+1; i < cendind; ++i )
-      sum += counts[i];
-    return sum;
-  }//if( roi.type is 'External' or 'Step' )
+    case 'DSCB': //http://nrs.harvard.edu/urn-3:HUL.InstRepos:29362185, chapter 6
+    {
+      // Piecewise indefinite integrals (in units of t), as the C++ uses; the direct closed-form areas sum wrong.
+      const al = skew(0), nl = skew(1), ar = skew(2), nr = skew(3);
+      const left = (z) => {
+        const t_1 = 1.0 - (al / (nl / (al + z)));
+        return -Math.exp(-0.5*al*al)*(t_1 / Math.pow(t_1, nl)) / ((al / nl) - al);
+      };
+      const right = (z) => Math.exp(-0.5*ar*ar)*(1 / ((ar / nr) - ar)) * Math.pow((1 + ((ar * (z - ar)) / nr)), (1 - nr));
+      const coreL = SQRT_2PI*phi(-al), coreR = SQRT_2PI*phi(ar), leftL = left(-al), rightR = right(ar);
+      const f = amp/(leftL + coreR - coreL - rightR);  // left(-inf) = right(inf) = 0
+      answer.cdf = (x) => {
+        const z = t(x);
+        if( z < -al )
+          return f*(left(z) - leftL);
+        if( z <= ar )
+          return f*(SQRT_2PI*phi(z) - coreL);
+        return f*(coreR - coreL + right(z) - rightR);
+      };
+      break;
+    }
 
-  x0 -= roi.referenceEnergy; x1 -= roi.referenceEnergy;
-  var answer = 0.0;
-  for( var i = 0; i < roi.coeffs.length; ++i )
-    answer += (roi.coeffs[i]/(i+1)) * (Math.pow(x1,i+1) - Math.pow(x0,i+1));
-  return Math.max( answer, 0.0 );
-}
+    case 'GaussExp': //https://arxiv.org/abs/1603.08591
+    {
+      const k = skew(0), edge = Math.exp(-0.5*k*k)/k, phiK = phi(-k), f = amp/(edge + SQRT_2PI*phi(k));
+      answer.cdf = (x) => {
+        const z = t(x);
+        return f*((z < -k) ? (Math.exp(0.5*k*k + k*z)/k) : (edge + SQRT_2PI*(phi(z) - phiK)));
+      };
+      break;
+    }
+
+    case 'ExpGaussExp': //https://arxiv.org/abs/1603.08591
+    {
+      const kl = skew(0), kr = skew(1);
+      const edgeL = Math.exp(-0.5*kl*kl)/kl, phiL = phi(-kl), phiR = phi(kr);
+      const f = amp/(edgeL + SQRT_2PI*(phiR - phiL) + Math.exp(-0.5*kr*kr)/kr);
+      answer.cdf = (x) => {
+        const z = t(x);
+        if( z < -kl )
+          return f*Math.exp(0.5*kl*kl + kl*z)/kl;
+        if( z <= kr )
+          return f*(edgeL + SQRT_2PI*(phi(z) - phiL));
+        return f*(edgeL + SQRT_2PI*(phiR - phiL) + (Math.exp(-0.5*kr*kr) - Math.exp(0.5*kr*kr - kr*z))/kr);
+      };
+      break;
+    }
+
+    case 'VoigtBortel': case 'VoigtPlusExGauss':
+    {
+      // (1-R)*Voigt + R*Exp*Gauss; Skew0=gamma_lor (Lorentzian HWHM), Skew1=R, Skew2=tau (Exp*Gauss skew).
+      //  The Voigt is the Thompson-Cox-Hastings pseudo-Voigt: a mixture of Gaussian and Lorentzian.
+      const gamma_lor = skew(0), R = skew(1), s = skew(2)/sigma;
+      const sqrt2ln2 = 1.17741002251;
+      const fG = 2 * sigma * sqrt2ln2, fL = 2 * gamma_lor;
+      const fV = Math.pow( Math.pow(fG,5) + 2.69269*Math.pow(fG,4)*fL + 2.42843*Math.pow(fG,3)*fL*fL
+                           + 4.47163*fG*fG*Math.pow(fL,3) + 0.07842*fG*Math.pow(fL,4) + Math.pow(fL,5), 0.2 );
+      const r = fL / fV;
+      const eta = Math.max(0, Math.min(1, 1.36603*r - 0.47719*r*r + 0.11116*r*r*r));
+      const sigma_p = fV / (2 * sqrt2ln2), gamma_p = fV / 2;
+      answer.cdf = (x) => {
+        const voigt = eta*(0.5 + Math.atan((x - mean)/gamma_p)/Math.PI) + (1 - eta)*phi((x - mean)/sigma_p);
+        return amp*((1 - R)*voigt + R*emgLow( t(x), s ));
+      };
+      break;
+    }
+
+    case 'GaussBortel': case 'GaussPlusExGauss':
+    {
+      // (1-R)*Gaussian + R*Exp*Gauss; Skew0=R, Skew1=tau
+      const R = skew(0), s = skew(1)/sigma;
+      answer.cdf = (x) => { const z = t(x); return amp*((1 - R)*phi(z) + R*emgLow(z, s)); };
+      break;
+    }
+
+    case 'DoubleBortel': case 'DoubleExGauss':
+    {
+      // Bortels & Collaers 1987: (1-eta)*Exp*Gauss(tau1) + eta*Exp*Gauss(tau1 + tau2_delta);
+      //  Skew0=tau1, Skew1=tau2_delta, Skew2=eta
+      const s1 = skew(0)/sigma, s2 = (skew(0) + skew(1))/sigma, eta = skew(2);
+      answer.cdf = (x) => { const z = t(x); return amp*((1 - eta)*emgLow(z, s1) + eta*emgLow(z, s2)); };
+      break;
+    }
+
+    case 'GadrasGeneric': case 'GadrasCZT':
+    {
+      // GADRAS peak shape: port of PeakDists_imp.hpp gadras_build_peak_shape / gadras_peak_shape_cdf.  A
+      //  Gaussian core mixed with one-sided exponential tails convolved with the Gaussian (closed-form EMGs),
+      //  the continuum limit of GADRAS's 128-point discrete form.
+      //  Skew params: Skew0=low_skew, Skew1=high_skew, Skew2=low_power, Skew3=high_power,
+      //               Skew4=low_extent, Skew5=high_extent.
+      // If the C++ was built with USE_GADRAS_TRUNCATION, peak.GadrasTrunc = [R_low, R_high] gives where (in
+      //  shape-zeta units) GADRAS's tails stop, and we truncate them the same way.
+      // (The PVT-like tail is not an exposed skew type, so is not implemented here.)
+      const isCZT = (peak.skewType === 'GadrasCZT');
+      const low_skew = skew(0), high_skew = skew(1), low_power = skew(2), high_power = skew(3);
+      const low_extent = skew(4), high_extent = skew(5);
+      const trunc = (Array.isArray(peak.GadrasTrunc) && (peak.GadrasTrunc.length === 2)) ? peak.GadrasTrunc : null;
+      const low_reach = trunc ? trunc[0] : 0.0, high_reach = trunc ? trunc[1] : 0.0;
+
+      // sum_skew (GetSumSkew): raw magnitudes, energy-scaled only when power >= 0.
+      let skew_p = Math.abs(high_skew), skew_n = Math.abs(low_skew);
+      if( high_power >= 0 ) skew_p *= Math.pow(mean/661.0, high_power);
+      if( low_power >= 0 ) skew_n *= Math.pow(mean/661.0, low_power);
+      const sum_skew = Math.min(1.0, (skew_p + skew_n)/100.0);
+
+      let low_val = Math.max(0.0, low_skew), high_val = Math.max(0.0, high_skew);
+      if( high_val > 0.0 ) low_val = Math.max(low_val, 0.1);
+      if( (sum_skew <= 0.0) || ((low_val <= 0.0) && (high_val <= 0.0)) )
+      {
+        answer.cdf = (x) => amp*phi( t(x) );
+        break;
+      }
+
+      // Weight e^{-R/s} of the shifted copy subtracted off to truncate a tail at R (0 => none).
+      const trunc_weight = (s, reach) => ((reach <= 0.0) || (reach > 40.0*s)) ? 0.0 : Math.exp(-reach/s);
+      const slope_scale = (extent) => (extent >= 0.0) ? (1.0 + extent/3.0) : Math.exp(extent/3.0);
+
+      // Area-normalized (over the possibly-truncated range) EMG tail mixtures, as [{w,s,tw}], with the weights
+      //  including SCN/SCP.
+      const make_side = (coeff, scale, side_weight, reach) => {
+        const tw = scale.map( (s) => trunc_weight(s, reach) );
+        const area = coeff.map( (c, i) => c*scale[i]*(1.0 - tw[i]) );
+        const total = area.reduce( (a, b) => a + b, 0.0 );
+        return scale.map( (s, i) => ({ w: ((total > 0.0) ? (side_weight*area[i]/total) : 0.0), s: s, tw: tw[i] }) );
+      };
+
+      const scn = low_val/(low_val + high_val), scp = high_val/(low_val + high_val);
+      let low = [], high = [];
+      if( low_val > 0.0 )
+      {
+        const sl = (isCZT ? 0.1 : 0.2)*slope_scale(low_extent)*low_val;
+        low = isCZT ? make_side( [0.8, 0.2], [sl, sl/0.8], scn, low_reach )
+                    : make_side( [1.0 - 0.04*low_val, 0.04*low_val], [sl, sl/0.4], scn, low_reach );
+      }
+      if( high_val > 0.0 )
+      {
+        const sh = (isCZT ? 0.1 : 0.2)*slope_scale(high_extent)*high_val;
+        high = isCZT ? make_side( [0.8, 0.2], [sh, sh/0.65], scp, high_reach )
+                     : make_side( [1.0], [sh], scp, high_reach );
+      }
+
+      const low_zeta_factor = Math.pow(661.0/mean, Math.max(0.0, low_power));
+      const high_zeta_factor = Math.pow(661.0/mean, Math.max(0.0, high_power));
+
+      answer.cdf = (x) => {
+        const zeta = t(x);
+        const z = zeta*((zeta > 0.0) ? high_zeta_factor : low_zeta_factor);
+        const shape_gauss = phi(z);
+        let shp = shape_gauss;
+        for( const c of low )
+        {
+          let F = emgLow( z, c.s );
+          if( c.tw > 0.0 )
+            F = (F - c.tw*emgLow( z + low_reach, c.s ))/(1.0 - c.tw);
+          shp += c.w*(F - shape_gauss);
+        }
+        for( const c of high )
+        {
+          let F = emgHigh( z, c.s );
+          if( c.tw > 0.0 )
+            F = (F - c.tw*emgHigh( z - high_reach, c.s ))/(1.0 - c.tw);
+          shp += c.w*(F - shape_gauss);
+        }
+        return amp*Math.min( 1.0, Math.max( 0.0, (1.0 - sum_skew)*phi(zeta) + sum_skew*shp ) );
+      };
+      break;
+    }
+
+    default: // 'NoSkew' (or an unknown skew type)
+      answer.cdf = (x) => amp*phi( t(x) );
+  }//switch( peak.skewType )
+
+  return answer;
+};//SpectrumChartD3.prototype._peakShape
+
+
+/** Returns a function giving the ROI continuum counts below energy x (up to a constant), or null if the ROI
+ has no continuum.
+ */
+SpectrumChartD3.prototype._continuumCdf = function( roi ){
+  const type = roi.type ? roi.type : '';
+
+  if( (type === 'External') || type.includes('Step') )
+  {
+    // Defined by per-channel counts: cumulative counts are linear within each channel, and past the ends we
+    //  extrapolate using the edge channels' densities (`energies` has one more entry than `counts`).
+    const energies = roi.continuumEnergies, counts = roi.continuumCounts;
+    const n = Math.min( energies ? (energies.length - 1) : 0, counts ? counts.length : 0 );
+    if( n < 1 )
+      return null;
+
+    const cum = new Float64Array( n + 1 );
+    for( let i = 0; i < n; ++i )
+      cum[i+1] = cum[i] + counts[i];
+    const density = (i) => counts[i] / (energies[i+1] - energies[i]);
+
+    return function( x ){
+      const i = Math.min( n - 1, Math.max( 0, d3.bisectRight( energies, x ) - 1 ) );
+      return cum[i] + (x - energies[i])*density(i);
+    };
+  }//if( continuum is defined by channel counts )
+
+  const coeffs = roi.coeffs, ref = roi.referenceEnergy;
+  if( (type === 'NoOffset') || !coeffs || !coeffs.length )
+    return null;
+
+  return function( x ){
+    const dx = x - ref;
+    let answer = 0.0, dxpow = dx;
+    for( let i = 0; i < coeffs.length; ++i, dxpow *= dx )
+      answer += coeffs[i]*dxpow/(i + 1);
+    return answer;
+  };
+};//SpectrumChartD3.prototype._continuumCdf
+
+
+/** Continuum counts of `roi` between energies x0 and x1. */
+SpectrumChartD3.prototype.offset_integral = function( roi, x0, x1 ){
+  const cdf = this._continuumCdf( roi );
+  return cdf ? Math.max( cdf(x1) - cdf(x0), 0.0 ) : 0.0;
+};
+
 
 /** -------------- Peak ROI / Label Rendering --------------
  *  ROI outline paths, peak shapes, and peak label placement. */
 SpectrumChartD3.prototype.drawPeaks = function() {
-  var self = this;
+  const self = this;
 
   self.peakVis.selectAll("*").remove();
   self.peakPaths = [];
-  self.labelinfo = null;
-  
-  
-  if( !this.rawData || !this.rawData.spectra ) 
+
+  if( !this.rawData || !this.rawData.spectra )
     return;
 
-  var minx = self.xScale.domain()[0], maxx = self.xScale.domain()[1];
+  const minx = self.xScale.domain()[0], maxx = self.xScale.domain()[1];
+  const pxPerKeV = (self.xScale(maxx) - self.xScale(minx)) / (maxx - minx);
+  const kSamplePx = 1.0;  // Approximate spacing, in pixels, of the points peaks are drawn with
+  const showlabels = (self.options.showUserLabels || self.options.showPeakLabels || self.options.showNuclideNames);
+  const labelinfo = [];
 
-  let labelinfo = [];
-  let showlabels = (self.options.showUserLabels || self.options.showPeakLabels || self.options.showNuclideNames);
-  
-  
-  /* Returns an array of paths.  
-     - The first path will be an underline of entire ROI
-     - The next roi.peaks.length entries are the fills for each of the peaks
-     - The next roi.peaks.length entries are the path of the peak, that sits on the ROI
+  const ybottom = Math.max.apply( null, self.yScale.range() );
+  const ypx = function( y ){ const v = self.yScale(y); return isFinite(v) ? v : ybottom; };
+  const toPx = (v) => Math.round( 100*v ) / 100;  // Plenty of precision, while keeping path strings short
+
+  /* Content of histogram `pts` (bin k spans [pts[k].x, pts[k+1].x), with content yOf(k), by default pts[k].y)
+     at energy x, linearly interpolated between bin centers: the bins content at its center, without stair-steps. */
+  function histAt( pts, x, yOf ){
+    const n = pts.length, y = yOf ? yOf : ((k) => pts[k].y);
+    if( n < 2 )
+      return n ? y(0) : 0;
+    const center = (k) => (k + 1 < n) ? 0.5*(pts[k].x + pts[k+1].x) : (1.5*pts[k].x - 0.5*pts[k-1].x);
+    let k = Math.min( n - 1, Math.max( 0, self._bisecX.right( pts, x ) - 1 ) );
+    if( (k > 0) && (x < center(k)) )
+      --k;
+    if( k === (n - 1) )
+      return y(k);
+    const frac = Math.min( 1, Math.max( 0, (x - center(k)) / (center(k+1) - center(k)) ) );
+    return y(k) + frac*(y(k+1) - y(k));
+  }//function histAt( pts, x, yOf )
+
+
+  /* Returns the drawing geometry of a ROI ({fills, outlines, cont, labels, yRangePx}), or null.
+
+     The curves give, at each energy x, the counts a displayed (possibly rebinned) channel centered on x
+     would contain: F(x + w/2) - F(x - w/2), with F the cumulative continuum (plus peak) counts, and w the
+     displayed channel width.  This passes exactly through the tops of the spectrum's histogram bars at
+     channel centers, and is smooth between them.  Channels much wider than the peaks are only sampled at
+     their center (between centers the curve would rise above the bars), so zoomed out, the curves are the
+     lines through the tops of the bars - and a narrow peak still shows, as tall as the bars it is in.
    */
-  function roiPath(roi,points,scaleFactor,background){
-    var paths = [];
-    var labels = showlabels ? [] : null;
-    var bisector = self._bisecX;
-    
-    let roiLB = Math.max(roi.lowerEnergy,minx);
-    let roiUB = Math.min(roi.upperEnergy,maxx);
-    
-    let xstartind = bisector.left( points, roiLB );
-    let xendind = bisector.right( points, roiUB );
+  function roiGeometry( roi, points, scaleFactor, background ){
+    const npts = points ? points.length : 0;
+    const xa = Math.max( roi.lowerEnergy, minx ), xb = Math.min( roi.upperEnergy, maxx );
+    if( (npts < 2) || !(xb > xa) )
+      return null;
 
-    // Boolean to signify whether to subtract points from background
-    const useBackgroundSubtract = self.options.backgroundSubtract && background;
+    const shapes = roi.peaks.map( (pk) => self._peakShape( pk ) );
 
-    if( xstartind >= (points.length-2) )
-      return { paths: paths };
-      
-    if( xendind >= (points.length-2) )
-      xendind = points.length - 2;
-   
-    if( xstartind >= xendind )
-      return { paths: paths };
-   
-    // (`bisector` is declared above at the top of roiPath; redeclaration removed below.)
-    /*The continuum values used for the first and last bin of the ROI are fudged */
-    /*  for now...  To be fixed */
-    let thisy = null, thisx = null, m, s, peak_area, cont_area;
-    
-    let firsty = self.offset_integral( roi, points[xstartind-(xstartind?1:0)].x, points[xstartind+(xstartind?0:1)].x ) * scaleFactor;
-    
-    // Background Subtract - Subtract the initial y-value with the corresponding background point
-    if (useBackgroundSubtract) {
-      const bi = bisector.left(background.points, points[xstartind-(xstartind?1:0)].x);
-      firsty -= background.points[bi] ? background.points[bi].y : 0;
-    }
-    
-    //paths[0] = "M" + self.xScale(points[xstartind].x) + "," + self.yScale(firsty) + " L";
-    paths[0] = "M" + self.xScale(roiLB) + "," + self.yScale(firsty) + " L";
-    
-    for( let j = 0; j < 2*roi.peaks.length; ++j )
-      paths[j+1] = "";
-      
-    //Go from left to right and create lower path for each of the outlines that sit on the continuum
-    for( var i = xstartind; i < xendind; ++i ) {
-      const x0 = points[i].x, x1 = points[i+1].x;
-      thisx = ((i===xstartind) ? roiLB : ((i===(xendind-1)) ? roiUB : (0.5*(x0 + x1))));
-      thisy = self.offset_integral( roi, x0, x1 ) * scaleFactor;
-      
-      // Background Subtract - Subtract the current y-value with the corresponding background point
-      if (useBackgroundSubtract) {
-        var bi = bisector.left(background.points, points[i].x);
-        thisy -= background.points[bi] ? background.points[bi].y : 0; 
-      }
+    // Samples are spaced about every kSamplePx pixels, but no closer than sigma/16 of the narrowest peak in view
+    //  (straight segments then deviate < 0.1% from the curve), so deep zooms don't evaluate thousands of points.
+    let minSigma = Infinity;
+    shapes.forEach( (s, j) => { if( s && (s.lo <= xb) && (s.hi >= xa) ) minSigma = Math.min( minSigma, roi.peaks[j].Width[0] ); } );
+    const stepPx = Math.min( 20, Math.max( kSamplePx, minSigma*pxPerKeV/16 ) );
 
-      paths[0] += " " + self.xScale(thisx) + "," + self.yScale(thisy);
-      
-      
-      for( let j = 0; j < roi.peaks.length; ++j ) {
-        m = roi.peaks[j].Centroid[0];
-        s = roi.peaks[j].Width[0];
-        const vr = roi.peaks[j].visRange ? roi.peaks[j].visRange : [(m - 5*s),(m + 5*s)];
-        
-        if( labels && m>=points[i].x && m<points[i+1].x ) {
-          //This misses any peaks with means not on the chart
-          if( !labels[j] )
-            labels[j] = {};
-          //ToDo: optimize what we actually need in these objects
-          labels[j].xindex = i;
-          labels[j].roiPeakIndex = j;
-          labels[j].roi = roi;
-          labels[j].peak = roi.peaks[j];
-          labels[j].centroidXPx = self.xScale(m);
-          labels[j].centroidMinYPx = self.yScale(thisy);
-          labels[j].energy = m;
-          labels[j].userLabel = roi.peaks[j].userLabel;
-        }//if( the centroid of this peak is in this bin )
-        
-        if( roi.peaks.length===1 || ((vr[0] <= x1) && (vr[1] >= x0)) || ((thisx >= vr[0]) && (thisx < vr[1])) ){
-          /* Anchor the outline at this bin's continuum height; each later qualifying bin
-             overwrites it, so after this loop the anchor is the RIGHT base of the peak.
-             The right-to-left pass below appends the top edge, and the final fixup appends
-             the left base - tracing rightBase -> top edge -> leftBase.
-             (Historical note: this was `if(!paths[j+1].length){ assign }else{ append }`,
-             but the fill path paths[j+1] is always empty during this loop, so the append
-             branch was dead and the net effect was exactly this overwrite.) */
-          paths[j+1+roi.peaks.length] = "M" + self.xScale(thisx) + "," + self.yScale(thisy) + " L";
-        }
-      }
-    }//for( var i = xstartind; i < xendind; ++i )
-
-    
-    function erf(x) {
-      // Error is less than 1.5 * 10-7 for all inputs (from Handbook of Mathematical Functions)
-      const sign = (x >= 0) ? 1 : -1; /* save the sign of x */
-      x = Math.abs(x);
-      const t = 1.0/(1.0 + 0.3275911*x);
-      const y = 1.0 - (((((1.061405429 * t + -1.453152027) * t) + 1.421413741) * t + -0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
-      return sign * y; /* erf(-x) = -erf(x); */
-    };
-    
-    function erfc( z ){
-      // Adapted from boost erf implementation - same as used in InterSpecs C++, see Boost Software License - Version 1.0
-      // The Exp*Gauss (Bortel) distribution requires a higher precision erfc, than just 1-erf, or even simpler approximations of erfc
-      if( z < 0 )
-        return (z < -0.5) ? (2 - erfc( -z )) : (1 + erf( -z ));
-
-      if( z < 0.5 )
-        return 1 - erf( z );
-      
-      if( z >= 28 )
-        return 0;
-      
-      if(z < 1.5 )
-      {
-        const P = [ -0.098090592216281240205, 0.178114665841120341155, 0.191003695796775433986, 0.0888900368967884466578, 0.0195049001251218801359, 0.00180424538297014223957];
-        const Q = [ 1.0, 1.84759070983002217845, 1.42628004845511324508, 0.578052804889902404909, 0.12385097467900864233, 0.0113385233577001411017, 0.337511472483094676155e-5
-        ];
-        
-        const zarg = z - 0.5;
-        const P_eval = ((((zarg*P[5] + P[4])*zarg + P[3])*zarg + P[2])*zarg + P[1])*zarg + P[0];
-        const Q_eval = (((((Q[6]*zarg + Q[5])*zarg + Q[4])*zarg + Q[3])*zarg + Q[2])*zarg + Q[1])*zarg + Q[0];
-        return (0.405935764312744140625 + P_eval / Q_eval) * (Math.exp(-z * z) / z);
-      }//if(z < 1.5f)
-      
-      if( z < 2.5 )
-      {
-        const P = [ -0.0243500476207698441272, 0.0386540375035707201728, 0.04394818964209516296, 0.0175679436311802092299, 0.00323962406290842133584, 0.000235839115596880717416 ];
-        const Q = [ 1.0, 1.53991494948552447182, 0.982403709157920235114, 0.325732924782444448493, 0.0563921837420478160373, 0.00410369723978904575884 ];
-        
-        const zarg = z - 1.5;
-        const P_eval = ((((zarg*P[5] + P[4])*zarg + P[3])*zarg + P[2])*zarg + P[1])*zarg + P[0];
-        const Q_eval = ((((zarg*Q[5] + Q[4])*zarg + Q[3])*zarg + Q[2])*zarg + Q[1])*zarg + Q[0];
-        return (0.50672817230224609375 + P_eval / Q_eval) * (Math.exp(-z * z) / z);
-      }//if( z < 2.5f
-      
-      if( z < 4.5 )
-      {
-        const P = [ 0.00295276716530971662634, 0.0137384425896355332126, 0.00840807615555585383007, 0.00212825620914618649141, 0.000250269961544794627958, 0.113212406648847561139e-4 ];
-        const Q = [ 1.0, 1.04217814166938418171, 0.442597659481563127003, 0.0958492726301061423444, 0.0105982906484876531489, 0.000479411269521714493907 ];
-        
-        const zarg = z - 3.5;
-        const P_eval = ((((zarg*P[5] + P[4])*zarg + P[3])*zarg + P[2])*zarg + P[1])*zarg + P[0];
-        const Q_eval = ((((zarg*Q[5] + Q[4])*zarg + Q[3])*zarg + Q[2])*zarg + Q[1])*zarg + Q[0];
-        return (0.5405750274658203125 + P_eval / Q_eval) * (Math.exp(-z * z) / z);
-      }//if( z < 4.5f )
-      
-      const P = [ 0.00628057170626964891937, 0.0175389834052493308818, -0.212652252872804219852, -0.687717681153649930619, -2.5518551727311523996, -3.22729451764143718517, -2.8175401114513378771 ];
-      const Q = [ 1.0, 2.79257750980575282228, 11.0567237927800161565, 15.930646027911794143, 22.9367376522880577224, 13.5064170191802889145, 5.48409182238641741584 ];
-      
-      const zarg = 1.0 / z;
-      const P_eval = (((((P[6]*zarg + P[5])*zarg + P[4])*zarg + P[3])*zarg + P[2])*zarg + P[1])*zarg + P[0];
-      const Q_eval = (((((Q[6]*zarg + Q[5])*zarg + Q[4])*zarg + Q[3])*zarg + Q[2])*zarg + Q[1])*zarg + Q[0];
-      return (0.5579090118408203125 + P_eval / Q_eval) * (Math.exp(-z * z) / z);
-    };//erfc
-
-    
-    
-    function photopeak_integral( peak, x0, x1 ) {
-      const mean = peak.Centroid[0], sigma = peak.Width[0], amp = peak.Amplitude[0];
-      const sqrt2 = 1.414213562373095;
-
-      // For the skew distributions, using PDF, rather than CDF (like we do for pure Gaussian), to
-      //  save computation time (if using skew, bins are narrow enough that we'll never notice)
-      if( !peak.skewType || (peak.skewType === '') || (peak.skewType === 'NoSkew') )
-      {
-        const t0 = (x0-mean)/(sqrt2*sigma);
-        const t1 = (x1-mean)/(sqrt2*sigma);
-        return amp * 0.5 * (erf(t1) - erf(t0));
-      }
-
-      // Common helper functions for CDF-based distributions
-      const gauss_cdf = (x) => 0.5 * (1 + erf((x - mean) / (sigma * sqrt2)));
-
-      const exgauss_cdf = (x, tau) => {
-        if( tau <= 0 ) return gauss_cdf(x);
-        const one_div_root_two = 0.7071067812;
-        const t = (x - mean) / sigma;
-        const erf_arg  = one_div_root_two * t;
-        const exp_arg  = sigma * (2.0*tau*t + sigma) / (2.0*tau*tau);
-        const erfc_arg = one_div_root_two * (t + (sigma/tau));
-
-        if( (exp_arg > 87.0) || (erfc_arg > 10.0) )
-          return 0.5 * (1.0 + erf(erf_arg));
-
-        return 0.5 * (1.0 + erf(erf_arg) + Math.exp(exp_arg) * erfc(erfc_arg));
-      };
-
-      const x = 0.5*(x1+x0);
-      const t = (x-mean)/sigma;
-      const norm = (x1-x0) * amp * (peak.DistNorm ? peak.DistNorm : 1);
-      const skew = peak.Skew0[0];
-      
-      if( (peak.skewType === 'Bortel') || (peak.skewType === 'ExGauss') ) //https://doi.org/10.1016/0883-2889(87)90180-8
-      {
-        const exp_arg = ((x - mean)/skew) + (sigma*sigma/(2*skew*skew));
-        const erfc_arg = 0.7071067812*(t + (sigma/skew));
-        
-        if( (skew <= 0) || (exp_arg > 87.0) || (erfc_arg > 10.0) )
-          return norm*(1/(sigma*2.5066282746)) * Math.exp(-0.5*t*t);
-        
-        return norm*(0.5/skew)*Math.exp(exp_arg) * erfc(erfc_arg);
-      }else if( peak.skewType === 'CB' )  //https://en.wikipedia.org/wiki/Crystal_Ball_function
-      {
-        const n = peak.Skew1[0];
-        if( t <= -skew )
-        {
-          const A = Math.pow(n/skew, n) * Math.exp(-0.5*skew*skew);
-          const B = (n/skew) - skew;
-          return norm*A*Math.pow( B - t, -n );
-        }
-            
-        return norm*Math.exp(-0.5*t*t);
-      }else if( peak.skewType === 'DSCB' ) //http://nrs.harvard.edu/urn-3:HUL.InstRepos:29362185, chapter 6
-      {
-        // Use indefinite integrals for the two-tail areas: the direct closed-form
-        // gives the wrong sum, matching the C++ implementation.
-        const a_l = peak.Skew0[0];
-        const n_l = peak.Skew1[0];
-        const a_r = peak.Skew2[0];
-        const n_r = peak.Skew3[0];
-        
-        function left_tail_indefinite(t) {
-          const t_1 = 1.0 - (a_l / (n_l / (a_l + t)));
-          return -Math.exp(-0.5*a_l*a_l)*(t_1 / Math.pow(t_1, n_l)) / ((a_l / n_l) - a_l);
-        };
-        
-        function right_tail_indefinite(t){
-          return Math.exp(-a_r*a_r/2)*(1 / ((a_r / n_r) - a_r)) * Math.pow((1 + ((a_r * (t - a_r)) / n_r)), (1 - n_r));
-        };
-        
-        function gauss_indefinite( t ){
-          return 1.2533141 * erf( 0.707106781186 * t );
-        };
-        
-        const t0 = (x0 - mean) / sigma, t1 = (x1 - mean) / sigma;
-        let answer = 0;
-        if( t0 < -a_l )
-          answer += left_tail_indefinite( Math.min(-a_l,t1) ) - left_tail_indefinite( t0 );
-        if( t1 > a_r )
-          answer += right_tail_indefinite( t1 ) - right_tail_indefinite( Math.max(a_r,t0) );
-        if( (t0 < a_r) && (t1 > -a_l) )
-          answer += gauss_indefinite( Math.min(a_r,t1) ) - gauss_indefinite( Math.max(-a_l,t0) );
-        
-        return amp * peak.DistNorm * answer;
-      }else if( peak.skewType === 'GaussExp' ) //https://arxiv.org/abs/1603.08591
-      {
-        return norm * Math.exp( (t >= -skew) ? (-0.5*t*t) : (0.5*skew*skew + skew*t) );
-      }else if( peak.skewType === 'ExpGaussExp' ) //https://arxiv.org/abs/1603.08591
-      {
-        const skew_right = peak.Skew1[0];
-        if( t > skew_right )
-          return norm*Math.exp( 0.5*skew_right*skew_right - skew_right*t );
-        if( t > -skew )
-          return norm*Math.exp( -0.5*t*t );
-        return norm*Math.exp( 0.5*skew*skew + skew*t );
-      }else if( (peak.skewType === 'VoigtBortel') || (peak.skewType === 'VoigtPlusExGauss') )
-      {
-        // VoigtPlusBortel / VoigtPlusExGauss: weighted mixture of Voigt and Exp*Gauss distributions
-        // Parameters: gamma_lor (Lorentzian HWHM), R (mixing ratio), tau (Exp*Gauss skew)
-        const gamma_lor = peak.Skew0[0], R = peak.Skew1[0], tau = peak.Skew2[0];
-
-        // Thompson-Cox-Hastings pseudo-Voigt parameters
-        const sqrt2ln2 = 1.17741002251;
-        const fG = 2 * sigma * sqrt2ln2, fL = 2 * gamma_lor;
-        const fG2 = fG * fG, fG3 = fG2 * fG, fG4 = fG3 * fG, fG5 = fG4 * fG;
-        const fL2 = fL * fL, fL3 = fL2 * fL, fL4 = fL3 * fL, fL5 = fL4 * fL;
-        const fV = Math.pow(fG5 + 2.69269*fG4*fL + 2.42843*fG3*fL2 + 4.47163*fG2*fL3 + 0.07842*fG*fL4 + fL5, 0.2);
-        const r = fL / fV;
-        const eta = Math.max(0, Math.min(1, 1.36603*r - 0.47719*r*r + 0.11116*r*r*r));
-        const sigma_p = fV / (2 * sqrt2ln2), gamma_p = fV / 2;
-
-        // Pseudo-Voigt CDF (mixture of Gaussian and Lorentzian CDFs)
-        const voigt_cdf = (x) => {
-          const z = (x - mean) / (sigma_p * sqrt2);
-          const voigt_gauss_cdf = 0.5 * (1 + erf(z));
-          const lorentz_cdf = 0.5 + Math.atan((x - mean) / gamma_p) / Math.PI;
-          return Math.max(0, Math.min(1, eta * lorentz_cdf + (1 - eta) * voigt_gauss_cdf));
-        };
-
-        // Integral via CDF differences: (1-R)*Voigt + R*Exp*Gauss
-        const cdf1 = (1 - R) * voigt_cdf(x1) + R * exgauss_cdf(x1, tau);
-        const cdf0 = (1 - R) * voigt_cdf(x0) + R * exgauss_cdf(x0, tau);
-        return amp * (cdf1 - cdf0);
-      }else if( (peak.skewType === 'GaussBortel') || (peak.skewType === 'GaussPlusExGauss') )
-      {
-        // GaussPlusBortel / GaussPlusExGauss: weighted mixture of Gaussian and Exp*Gauss distributions
-        // Parameters: R (mixing ratio, 0=Gaussian, 1=Exp*Gauss), tau (Exp*Gauss skew)
-        const R = peak.Skew0[0], tau = peak.Skew1[0];
-
-        // Integral via CDF differences: (1-R)*Gaussian + R*Exp*Gauss
-        const cdf1 = (1 - R) * gauss_cdf(x1) + R * exgauss_cdf(x1, tau);
-        const cdf0 = (1 - R) * gauss_cdf(x0) + R * exgauss_cdf(x0, tau);
-        return amp * (cdf1 - cdf0);
-      }else if( (peak.skewType === 'DoubleBortel') || (peak.skewType === 'DoubleExGauss') )
-      {
-        // DoubleBortel / DoubleExGauss from Bortels & Collaers 1987:
-        // Weighted sum of two Exp*Gauss distributions with different tau values
-        // Parameters: tau1, tau2_delta (tau2 = tau1 + tau2_delta), eta (weight of second Exp*Gauss)
-        const tau1 = peak.Skew0[0], tau2_delta = peak.Skew1[0], eta = peak.Skew2[0];
-        const tau2 = tau1 + tau2_delta;
-
-        // Integral via CDF differences: (1-eta)*Exp*Gauss(tau1) + eta*Exp*Gauss(tau2)
-        const cdf1 = (1 - eta) * exgauss_cdf(x1, tau1) + eta * exgauss_cdf(x1, tau2);
-        const cdf0 = (1 - eta) * exgauss_cdf(x0, tau1) + eta * exgauss_cdf(x0, tau2);
-        return amp * (cdf1 - cdf0);
-      }else if( (peak.skewType === 'GadrasGeneric') || (peak.skewType === 'GadrasCZT') )
-      {
-        // GADRAS peak shape: analytic exponentially-modified-Gaussian (EMG) form.
-        // Port of PeakDists_imp.hpp gadras_build_peak_shape / gadras_peak_shape_cdf.  The skewed
-        // shape is a Gaussian core mixed with one-sided exponential tails convolved with the
-        // Gaussian (a closed-form EMG) -- the continuum limit of GADRAS's 128-point discrete form.
-        // Skew params: Skew0=low_skew, Skew1=high_skew, Skew2=low_power, Skew3=high_power,
-        //              Skew4=low_extent, Skew5=high_extent.
-        // If the C++ was built with USE_GADRAS_TRUNCATION, peak.GadrasTrunc = [R_low, R_high] gives
-        // where (in shape-zeta units) GADRAS's tails stop, and we truncate them the same way.
-        // (The PVT-like tail is not an exposed skew type, so is not implemented here.)
-        const isCZT = (peak.skewType === 'GadrasCZT');
-        const low_skew = peak.Skew0[0], high_skew = peak.Skew1[0];
-        const low_power = peak.Skew2[0], high_power = peak.Skew3[0];
-        const low_extent = peak.Skew4[0], high_extent = peak.Skew5[0];
-        const trunc = (Array.isArray(peak.GadrasTrunc) && (peak.GadrasTrunc.length === 2)) ? peak.GadrasTrunc : null;
-        const low_reach = trunc ? trunc[0] : 0.0, high_reach = trunc ? trunc[1] : 0.0;
-        const energy = mean;
-        const INV_SQRT2 = 0.70710678118654752440;
-        const INV_SQRT_PI = 0.56418958354775628695;
-        const snorm_cdf = (z) => 0.5*erfc(-z*INV_SQRT2);
-
-        // erfcx(x) = exp(x*x)*erfc(x) for x>=0, using the accurate erfc() above (1-erf(x), with
-        // erf() only good to ~1E-7 absolute, is badly wrong for small tail scales); beyond x=25 we
-        // use the asymptotic series to avoid exp(x*x) overflow.
-        const erfcx_nonneg = (x) => {
-          if( x < 25.0 ) return Math.exp(x*x)*erfc(x);
-          const inv_2x2 = 1.0/(2.0*x*x);
-          let term = 1.0, sum = 1.0;
-          for( let k = 1; k <= 6; ++k ){ term *= -(2*k-1)*inv_2x2; sum += term; }
-          return (INV_SQRT_PI/x)*sum;
-        };
-        // exp(exp_arg)*0.5*erfc(erfc_arg), overflow-safe (exp_arg - erfc_arg^2 == -0.5 z^2).
-        const stable_tail_term = (exp_arg, erfc_arg, z) => {
-          if( (exp_arg > 87.0) || (erfc_arg > 10.0) )
-            return 0.5*erfcx_nonneg(erfc_arg)*Math.exp(-0.5*z*z);
-          return 0.5*Math.exp(exp_arg)*erfc(erfc_arg);
-        };
-        const left_tail_cdf = (z, s) => {
-          const exp_arg = z/s + 1.0/(2.0*s*s);
-          const erfc_arg = (z + 1.0/s)*INV_SQRT2;
-          return snorm_cdf(z) + stable_tail_term(exp_arg, erfc_arg, z);
-        };
-        const right_tail_cdf = (z, s) => {
-          const exp_arg = -z/s + 1.0/(2.0*s*s);
-          const erfc_arg = (1.0/s - z)*INV_SQRT2;
-          return snorm_cdf(z) - stable_tail_term(exp_arg, erfc_arg, z);
-        };
-        // weight e^{-R/s} of the shifted copy subtracted off to truncate a tail at R (0 => none).
-        const trunc_weight = (s, reach) => ((reach <= 0.0) || (reach > 40.0*s)) ? 0.0 : Math.exp(-reach/s);
-
-        // sum_skew (GetSumSkew): raw magnitudes, energy-scaled only when power >= 0.
-        let skew_p = Math.abs(high_skew);
-        if( high_power >= 0 ) skew_p *= Math.pow(energy/661.0, high_power);
-        let skew_n = Math.abs(low_skew);
-        if( low_power >= 0 ) skew_n *= Math.pow(energy/661.0, low_power);
-        const sum_skew = Math.min(1.0, (skew_p + skew_n)/100.0);
-
-        const gauss0 = snorm_cdf((x0-mean)/sigma), gauss1 = snorm_cdf((x1-mean)/sigma);
-        if( sum_skew <= 0.0 )
-          return amp * (gauss1 - gauss0);
-
-        let low_val = Math.max(0.0, low_skew), high_val = Math.max(0.0, high_skew);
-        if( high_val > 0.0 ) low_val = Math.max(low_val, 0.1);
-        if( (low_val <= 0.0) && (high_val <= 0.0) )
-          return amp * (gauss1 - gauss0);
-
-        const denom = low_val + high_val;
-        const scn = low_val/denom;
-        const scp = high_val/denom;
-        const slope_scale = (extent) => (extent >= 0.0) ? (1.0 + extent/3.0) : Math.exp(extent/3.0);
-
-        // Build area-normalized (over the possibly-truncated range) EMG tail mixtures; the
-        //  weights include SCN/SCP.
-        const low_w = [], low_s = [], low_t = [], high_w = [], high_s = [], high_t = [];
-        const fill_side = (wArr, sArr, tArr, coeff, scale, side_weight, reach) => {
-          let area = 0.0;
-          const comp_area = [];
-          for( let i = 0; i < coeff.length; ++i ) {
-            const tw = trunc_weight(scale[i], reach);
-            tArr.push( tw );
-            comp_area.push( coeff[i]*scale[i]*(1.0 - tw) );
-            area += comp_area[i];
-          }
-          for( let i = 0; i < coeff.length; ++i ) {
-            wArr.push( (area > 0.0) ? (side_weight*comp_area[i]/area) : 0.0 );
-            sArr.push( scale[i] );
-          }
-        };
-
-        if( low_val > 0.0 ) {
-          const lss = slope_scale(low_extent);
-          if( isCZT ) {
-            const slopen = 0.1*lss*low_val;
-            fill_side(low_w, low_s, low_t, [0.8, 0.2], [slopen, slopen/0.8], scn, low_reach);
-          } else {
-            const slopen = 0.2*lss*low_val, fr = 0.04*low_val;
-            fill_side(low_w, low_s, low_t, [1.0-fr, fr], [slopen, slopen/0.4], scn, low_reach);
-          }
-        }
-        if( high_val > 0.0 ) {
-          const hss = slope_scale(high_extent);
-          if( isCZT ) {
-            const slopep = 0.1*hss*high_val;
-            fill_side(high_w, high_s, high_t, [0.8, 0.2], [slopep, slopep/0.65], scp, high_reach);
-          } else {
-            const slopep = 0.2*hss*high_val;
-            fill_side(high_w, high_s, high_t, [1.0], [slopep], scp, high_reach);
-          }
-        }
-
-        const low_zeta_factor = Math.pow(661.0/energy, Math.max(0.0, low_power));
-        const high_zeta_factor = Math.pow(661.0/energy, Math.max(0.0, high_power));
-
-        const shape_cdf = (zeta) => {
-          const gauss = snorm_cdf(zeta);
-          const factor = (zeta > 0.0) ? high_zeta_factor : low_zeta_factor;
-          const z_shape = zeta*factor;
-          const shape_gauss = snorm_cdf(z_shape);
-          let shp = shape_gauss;
-          for( let i = 0; i < low_w.length; ++i ) {
-            let F = left_tail_cdf(z_shape, low_s[i]);
-            if( low_t[i] > 0.0 )
-              F = (F - low_t[i]*left_tail_cdf(z_shape + low_reach, low_s[i]))/(1.0 - low_t[i]);
-            shp += low_w[i]*(F - shape_gauss);
-          }
-          for( let i = 0; i < high_w.length; ++i ) {
-            let F = right_tail_cdf(z_shape, high_s[i]);
-            if( high_t[i] > 0.0 )
-              F = (F - high_t[i]*right_tail_cdf(z_shape - high_reach, high_s[i]))/(1.0 - high_t[i]);
-            shp += high_w[i]*(F - shape_gauss);
-          }
-          const r = (1.0 - sum_skew)*gauss + sum_skew*shp;
-          return Math.min(1.0, Math.max(0.0, r));
-        };
-
-        return amp * (shape_cdf((x1-mean)/sigma) - shape_cdf((x0-mean)/sigma));
-      }else
-      {
-      }
-    };
-
-    var peakamplitudes = [];  //The peak amplitudes for each bin
-
-    var leftMostLineValue = [];
-
-    var minypx = self.size.height, maxypx = 0;
-    
-    
-    //Go from right to left drawing the peak lines that sit on the continuum.
-    for( let xindex = xendind - 1; xindex >= xstartind; --xindex ) {
-      const x0 = points[xindex].x, x1 = points[xindex+1].x;
-      peakamplitudes[xindex] = [];
-      peak_area = 0.0;
-      //thisx = 0.5*(x0 + x1);
-      thisx = ((xindex===xstartind) ? roiLB : ((xindex===(xendind-1)) ? roiUB : (0.5*(x0 + x1))));
-      
-      cont_area = self.offset_integral( roi, x0, x1 ) * scaleFactor;
-
-      // Background Subtract - Subtract the current y-value with the corresponding background point
-      if( useBackgroundSubtract ) {
-        const bgi = bisector.left(background.points, x0);
-        cont_area -= background.points[bgi] ? background.points[bgi].y : 0;
-      }
-
-      peakamplitudes[xindex][0] = cont_area;
-      peakamplitudes[xindex][1] = thisx;
-
-      roi.peaks.forEach( function(peak,peakn){
-        const ispeakcenter = (labels && labels[peakn] && labels[peakn].xindex===xindex);
-        
-        if( peak.type === 'GaussianDefined' ){
-          let area = photopeak_integral( peak, x0, x1 ) * scaleFactor;
-          peak_area += area;
-
-          m = peak.Centroid[0];
-          s = peak.Width[0];
-          const vr = peak.visRange ? peak.visRange : [(m - 5*s),(m + 5*s)];
-          
-          if( (roi.peaks.length === 1) || ((vr[0] <= x1) && (vr[1] >= x0)) || ((thisx >= vr[0]) && (thisx < vr[1]))  ){
-            peakamplitudes[xindex][peakn+2] = area;
-            let yvalpx = self.yScale(cont_area + area);
-            minypx = Math.min(minypx,yvalpx);
-            maxypx = Math.max(maxypx,yvalpx);
-            if( ispeakcenter )
-              labels[peakn].centroidMaxYPx = yvalpx;
-            paths[peakn+1+roi.peaks.length] += " " + self.xScale(thisx) + "," + yvalpx;
-            leftMostLineValue[peakn] = {x : thisx, y: cont_area};
-          }else{
-            peakamplitudes[xindex][peakn+2] = 0.0;
-          }
-        } else if( peak.type === 'DataDefined' ) {
-          let area = points[xindex].y - cont_area;
-          peakamplitudes[xindex][peakn+2] = (area > 0 ? area : 0);
-          let yvalpx = self.yScale(cont_area + (area >= 0 ? area : 0.0));
-          minypx = Math.min(minypx,yvalpx);
-          maxypx = Math.max(maxypx,yvalpx);
-          if( ispeakcenter && labels[peakn] )
-            labels[peakn].centroidMaxYPx = yvalpx;
-          paths[peakn+1+roi.peaks.length] += " " + self.xScale(thisx) + "," + yvalpx;
-          leftMostLineValue[peakn] = {x : thisx, y: cont_area};
-        } else {
-          return;
-        }
-      });
-    }//for( go right to left over 'xindex' drawing peak outlines )
-
-    
-    //Make sure the peak line top connects with the continuum
-    for( let j = 0; j < roi.peaks.length; ++j ) {
-      let pathnum = j+1+roi.peaks.length;
-      if( leftMostLineValue[j] && paths[pathnum] && paths[pathnum].length )
-        paths[pathnum] += " " + self.xScale(leftMostLineValue[j].x) + "," + self.yScale(leftMostLineValue[j].y);
-    }
-
-    let leftMostFillValue = [];
-  
-    function makePathForPeak(peakamps, xindex, leftToRight){
-      const cont = peakamps[0], thisx = peakamps[1];
-      const x0 = points[xindex].x, x1 = points[xindex+1].x;
-      
-      peakamps.forEach( function( peakamp, peakindex ){
-        if( peakindex < 2 )
-          return;
-        const peaknum = (peakindex - 2);
-        const peak = roi.peaks[peaknum];
-        const m = peak.Centroid[0], s = peak.Width[0];
-        const vr = peak.visRange ? peak.visRange : [(m - 5*s),(m + 5*s)];
-        
-        if( (roi.peaks.length !== 1) && !((vr[0] <= x1) && (vr[1] >= x0)) && !((thisx >= vr[0]) && (thisx < vr[1]))  )
-          return;
-        
-        let thisy = cont;
-        for( var j = 2; j < (peakindex + (leftToRight ? 0 : 1)); ++j )
-          thisy += peakamps[j];
-        
-        const xvalpx = self.xScale(thisx);
-        const yvalpx = self.yScale(thisy);
-        minypx = Math.min(minypx,yvalpx);
-        maxypx = Math.max(maxypx,yvalpx);
-        
-        if( !paths[peaknum+1].length ){
-          if( leftToRight )
-            leftMostFillValue[peaknum] = { x: xvalpx, y: yvalpx };
-          paths[peaknum+1] = "M" + xvalpx + "," + yvalpx + " L";
+    // Sample energies `xs`, and the displayed channel width at each, `ws`.  Samples are anchored to channels
+    //  (so panning doesn't make the curves wiggle), with an odd number per channel so its center is always
+    //  included.  The curves are the lines through the samples, clipped to [xa, xb], so we also keep the last
+    //  sample at or before xa, and the first at or after xb (or use xa or xb themselves, if there is none).
+    const binWidth = (k) => (k + 1 < npts) ? (points[k+1].x - points[k].x) : (points[k].x - points[k-1].x);
+    const binAt = (x) => Math.min( npts - 1, Math.max( 0, self._bisecX.right( points, x ) - 1 ) );
+    const xs = [xa], ws = [binWidth( binAt(xa) )];
+    let done = false;
+    for( let k = Math.max( 0, binAt(xa) - 1 ); !done && (k < npts); ++k ){
+      const lo = points[k].x, w = binWidth(k);
+      if( !(w > 0) )
+        continue;
+      // (just the center, for channels too wide to resolve the peaks)
+      const m = (w > 2*minSigma) ? 1 : (1 + 2*Math.floor( 0.5*w*pxPerKeV/stepPx )), dx = w/m;
+      for( let s = Math.min( m - 1, Math.max( 0, Math.floor( (xa - lo)/dx - 0.5 ) ) ); !done && (s < m); ++s ){
+        const x = lo + (s + 0.5)*dx;
+        if( x <= xa ){
+          xs[0] = x;
+          ws[0] = w;
         }else{
-          paths[peaknum+1] += " " + xvalpx + "," + yvalpx;
+          xs.push( x );
+          ws.push( w );
+          done = (x >= xb);
         }
-      } );
-    }; //makePathForPeak function
-    
-    
-    //go from left to right, drawing fill area bottom
-    peakamplitudes.forEach( function(peakamps,xindex){ makePathForPeak(peakamps,xindex,true); } );
-
-    
-    //go right to left and draw the fill areas top
-    // TODO: We should be able to use this next line to make the paths for peaks, but it ends up being a bit wonky (See commit fc790795b24d21431467c32ca189c05e2f9b0f12 for when this issue was introduced)
-    //peakamplitudes.reverse().forEach( function(peakamps,xindex){ makePathForPeak(peakamps,xindex,false); } );
-    // But if we use this next loop instead, things are fine:
-    peakamplitudes.reverse().forEach( function(peakamps,xindex){
-      var cont = peakamps[0];
-      var thisx = peakamps[1];
-          
-      peakamps.forEach( function( peakamp, peakindex ){
-        if( peakindex < 2 )
-          return;
-
-        const peaknum = (peakindex - 2);
-        const peak = roi.peaks[peaknum];
-        const m = peak.Centroid[0];
-        const s = peak.Width[0];
-        const vr = peak.visRange ? peak.visRange : [(m - 5*s),(m + 5*s)];
-          
-        if( (roi.peaks.length > 1) && ((thisx < vr[0]) || (thisx > vr[1])) )
-          return;
-          
-        var thisy = cont;
-        for( var j = 2; j <= peakindex; ++j )
-          thisy += peakamps[j];
-
-        paths[peaknum+1] += " " + self.xScale(thisx) + "," + self.yScale(thisy);
-      } );
-    });
-
-    for( var peaknum = 0; peaknum < roi.peaks.length; ++peaknum ){
-      if( leftMostFillValue[peaknum] && paths[peaknum+1].length )
-        paths[peaknum+1] += " " + leftMostFillValue[peaknum].x + "," + leftMostFillValue[peaknum].y;
+      }
+    }//for( loop over displayed channels )
+    if( !done ){
+      xs.push( xb );
+      ws.push( binWidth( binAt(xb) ) );
     }
-    
-    return {paths: paths, yRangePx: [minypx,maxypx], labelinfo: labels };
-  }/*function roiPath(roi) */
+    const n = xs.length;
 
-  function draw_roi(roi,specindex,spectrum) {
-    if( roi.type !== 'NoOffset' && roi.type !== 'Constant'
-        && roi.type !== 'Linear' && roi.type !== 'Quadratic'
-        && roi.type !== 'Quardratic' //vestigual, can be deleted in the future.
-        && roi.type !== 'Cubic' && roi.type !== 'External'
-        && !roi.type.includes('FlatStep') && !roi.type.includes('LinearStep') ){
-      return;
+    // Each samples window, [x - w/2, x + w/2], as indexes into `ends`, the energies CDFs are evaluated at; a
+    //  samples upper end is usually the lower end of the same sample in the next channel, so is shared.
+    const ends = [], iLo = new Int32Array( n ), iHi = new Int32Array( n ), eps = 1e-6/pxPerKeV;
+    for( let a = 0, b = 0; (a < n) || (b < n); ){
+      const takeLo = (b >= n) || ((a < n) && ((xs[a] - 0.5*ws[a]) <= (xs[b] + 0.5*ws[b])));
+      const e = takeLo ? (xs[a] - 0.5*ws[a]) : (xs[b] + 0.5*ws[b]);
+      if( !ends.length || (Math.abs( e - ends[ends.length - 1] ) > eps) )
+        ends.push( e );
+      if( takeLo ) iLo[a++] = ends.length - 1; else iHi[b++] = ends.length - 1;
     }
 
-    if( roi.lowerEnergy > maxx || roi.upperEnergy < minx )
-      return;
+    // The end samples get moved onto xa and xb, along the line to their neighbor.
+    const fa = (xa - xs[0])/(xs[1] - xs[0]), fb = (xb - xs[n-2])/(xs[n-1] - xs[n-2]);
+    xs[0] = xa;
+    xs[n-1] = xb;
 
-    if (!spectrum) {
-      return;
+    // Sets out[d0..d1] to the counts in each samples window, by `cdf`, for samples i0 through i1 (zero for the
+    //  others), with the end samples moved onto xa and xb.  Each CDF value is computed once (cached by `tag`).
+    let tag = 0;
+    const Fv = new Float64Array( ends.length ), Ftag = new Int32Array( ends.length );
+    const cdfAt = function( cdf, j ){
+      if( Ftag[j] !== tag ){
+        Ftag[j] = tag;
+        Fv[j] = cdf( ends[j] );
+      }
+      return Fv[j];
+    };
+    const windowCounts = function( cdf, out, d0, d1, i0, i1 ){
+      ++tag;
+      for( let i = d0; i <= d1; ++i )
+        out[i] = ((i < i0) || (i > i1)) ? 0.0 : scaleFactor*Math.max( 0, cdfAt( cdf, iHi[i] ) - cdfAt( cdf, iLo[i] ) );
+      const v0 = out[0], v1 = out[1], vm = out[n-2], vn = out[n-1];
+      if( d0 === 0 )
+        out[0] = v0 + fa*(v1 - v0);
+      if( d1 === (n - 1) )
+        out[n-1] = vm + fb*(vn - vm);
+    };
+
+    // When subtracting the background, it is taken at channel centers the same way the displayed bars do.
+    const bgPts = (self.options.backgroundSubtract && background && background.points && (background.points.length > 1))
+                  ? background.points : null;
+    const bgOfBin = (k) => { const b = bgPts[self._bisecX.left( bgPts, points[k].x )]; return b ? b.y : 0; };
+    const bgAt = (x) => bgPts ? histAt( points, x, bgOfBin ) : 0.0;
+
+    // Counts of the continuum `c`, and of it plus the peaks so far `stack`, and their pixel y-values.
+    const c = new Float64Array( n ), stack = new Float64Array( n ), p = new Float64Array( n );
+    const cPx = new Float64Array( n ), stackPx = new Float64Array( n ), topPx = new Float64Array( n );
+    const contCdf = self._continuumCdf( roi );
+    if( contCdf )
+      windowCounts( contCdf, c, 0, n - 1, 0, n - 1 );
+    for( let i = 0; i < n; ++i ){
+      stack[i] = (c[i] -= bgAt( xs[i] ));
+      stackPx[i] = cPx[i] = ypx( c[i] );
     }
-    
-    if( self.yScale.domain()[0] === self.yScale.domain()[1] ){
-      return;
-    }
 
-    let scaleFactor = spectrum.type !== self.spectrumTypes.FOREGROUND ? spectrum.yScaleFactor * 1.0 : 1.0;
-    if (typeof scaleFactor === 'undefined' || scaleFactor === null) scaleFactor = 1.0;
+    const xpx = xs.map( (x) => self.xScale(x) );
 
-    var pathsAndRange = roiPath( roi, spectrum.points, scaleFactor, self.getSpectrumByID(spectrum.backgroundID) );
+    // Returns " x,y x,y ..." for samples i0 through i1 (reversed, if `rev`), with `yPx(i)` their pixel y.  Samples
+    //  within 0.1px (vertically) of the line drawn past them are left out; `lo` and `hi` bound the slopes from
+    //  the last point drawn that keep every left out sample within this.
+    const coords = function( yPx, i0, i1, rev ){
+      let s = "", ax = 0, ay = 0, lo = 0, hi = 0, px = 0, py = 0;
+      const draw = function( x, y ){
+        s += " " + toPx(x) + "," + toPx(y);
+        ax = x; ay = y; lo = -Infinity; hi = Infinity;
+      };
+      for( let j = i0; j <= i1; ++j ){
+        const i = rev ? (i0 + i1 - j) : j, x = xpx[i], y = yPx(i);
+        if( j === i0 ){
+          draw( x, y );
+        }else{
+          let u = Math.abs( x - ax );
+          const slope = (y - ay)/u;
+          if( !(slope >= lo) || !(slope <= hi) ){
+            draw( px, py );
+            u = Math.abs( x - ax );
+          }
+          if( u > 0 ){
+            lo = Math.max( lo, (y - ay - 0.1)/u );
+            hi = Math.min( hi, (y - ay + 0.1)/u );
+          }
+        }
+        px = x;
+        py = y;
+      }
+      if( i1 > i0 )
+        draw( px, py );
+      return s;
+    };
 
-    if( pathsAndRange.labelinfo )
-      Array.prototype.push.apply(labelinfo,pathsAndRange.labelinfo);
-    
-    /* Draw label, set fill colors */
-    pathsAndRange.paths.forEach( function(p,num){
+    // First sample index for which `pred(i)` is true, for a `pred` that is false and then true.
+    const firstTrue = function( pred ){
+      let lo = 0, hi = n;
+      while( lo < hi ){
+        const mid = (lo + hi) >> 1;
+        if( pred(mid) ) hi = mid; else lo = mid + 1;
+      }
+      return lo;
+    };
 
-      /* - The first path will be an underline of entire ROI
-         - The next roi.peaks.length entries are the fills for each of the peaks
-         - The next roi.peaks.length entries are the path of the peak, that sits on the ROI
-       
-       If a peak in the ROI is not visible (ROI partially off screen), then path will be empty.
-      */
-      if( (num === 0) || !p.length )
+    const geom = { fills: [], outlines: [], cont: null, labels: [], yRangePx: null };
+    const npeaks = roi.peaks.length;
+
+    // Peaks are stacked in ROI order: each peaks fill sits on top of the continuum plus the earlier peaks,
+    //  while (in multi-peak ROIs) each peaks outline sits on just the continuum.
+    roi.peaks.forEach( function( peak, j ){
+      const shape = shapes[j];
+      if( !shape && (peak.type !== 'DataDefined') )
         return;
-        
-      console.assert( p.startsWith("M"), "Got path not starting with 'M': " + p );
-      if( p.endsWith("L") || !p.startsWith("M") ) //Protect against single channel paths we didnt complete above; TODO: fix this
+
+      // The samples whose windows the peak is in (the only peak in a ROI is drawn across the whole ROI); its
+      //  fill and outline span one more sample each side, to start and end on what it sits on.
+      const whole = !shape || (npeaks === 1);
+      const i0 = whole ? 0 : firstTrue( (i) => (ends[iHi[i]] >= shape.lo) );
+      const i1 = whole ? (n - 1) : (firstTrue( (i) => (ends[iLo[i]] > shape.hi) ) - 1);
+      if( i0 > i1 )
         return;
+      const d0 = Math.max( 0, i0 - 1 ), d1 = Math.min( n - 1, i1 + 1 );
 
-      //If only a single peak in a ROI, we will use the same path for outline and fill
-      if( roi.peaks.length==1 && num > roi.peaks.length )
-        return;
-      
-      let isOutline = ((num > (roi.peaks.length)) || (roi.peaks.length==1));
-      let isFill  = (num <= (roi.peaks.length));
+      if( shape )
+        windowCounts( shape.cdf, p, d0, d1, i0, i1 );
+      else  // A 'DataDefined' peak is the data above the continuum
+        for( let i = 0; i < n; ++i )
+          p[i] = Math.max( 0, histAt(points, xs[i]) - bgAt(xs[i]) - c[i] );
 
-      var path = self.peakVis.append("path").attr("d", p );
+      for( let i = d0; i <= d1; ++i )
+        topPx[i] = ypx( stack[i] + p[i] );
 
-      var peakind = (num-1) % roi.peaks.length;
-      var peak = roi.peaks[peakind];
-      var peakColor = peak && peak.lineColor && peak.lineColor.length ? peak.lineColor : spectrum.peakColor;
+      geom.fills.push( { peak: peak,
+        d: "M" + coords( (i) => stackPx[i], d0, d1, false ) + coords( (i) => topPx[i], d0, d1, true ) + "Z" } );
 
-      let info = {
+      if( npeaks > 1 )
+        geom.outlines.push( { peak: peak, d: "M" + coords( (i) => cPx[i], d0, d0 )
+                               + coords( (i) => ypx(c[i] + p[i]), d0, d1 ) + coords( (i) => cPx[i], d1, d1 ) } );
+
+      for( let i = d0; i <= d1; ++i ){
+        stack[i] += p[i];
+        stackPx[i] = topPx[i];
+      }
+
+      const mean = peak.Centroid ? peak.Centroid[0] : NaN;
+      if( showlabels && (mean >= xa) && (mean <= xb) ){
+        // The continuum, and continuum plus this peak, at the centroid along the drawn lines
+        const i = Math.max( 1, firstTrue( (i) => (xs[i] >= mean) ) ), f = (mean - xs[i-1])/(xs[i] - xs[i-1]);
+        const cont = c[i-1] + f*(c[i] - c[i-1]), pk = p[i-1] + f*(p[i] - p[i-1]);
+        geom.labels.push( { roi: roi, peak: peak, energy: mean, userLabel: peak.userLabel,
+                            centroidXPx: self.xScale(mean), centroidMinYPx: ypx(cont), centroidMaxYPx: ypx(cont + pk) } );
+      }
+    } );//roi.peaks.forEach
+
+    geom.cont = "M" + coords( (i) => cPx[i], 0, n - 1 );
+
+    let minypx = Infinity, maxypx = -Infinity;
+    for( let i = 0; i < n; ++i ){
+      minypx = Math.min( minypx, cPx[i], stackPx[i] );
+      maxypx = Math.max( maxypx, cPx[i], stackPx[i] );
+    }
+    geom.yRangePx = [minypx, maxypx];
+
+    return geom;
+  }//function roiGeometry(...)
+
+
+  function draw_roi( roi, specindex, spectrum ){
+    if( !roi || !roi.peaks || !roi.peaks.length || (roi.lowerEnergy > maxx) || (roi.upperEnergy < minx)
+        || (self.yScale.domain()[0] === self.yScale.domain()[1]) )
+      return;
+
+    const scaleFactor = ((spectrum.type !== self.spectrumTypes.FOREGROUND) && (typeof spectrum.yScaleFactor === 'number'))
+                        ? spectrum.yScaleFactor : 1.0;
+    const geom = roiGeometry( roi, spectrum.points, scaleFactor, self.getSpectrumByID(spectrum.backgroundID) );
+    if( !geom )
+      return;
+
+    Array.prototype.push.apply( labelinfo, geom.labels );
+
+    const multi = (roi.peaks.length > 1);
+    const xRangePx = [self.xScale(roi.lowerEnergy), self.xScale(roi.upperEnergy)];
+
+    // Adds a peak's path, returning its color.  The paths responding to the mouse are those with `isOutline`
+    //  set: a single-peak ROI's fill, or a multi-peak ROI's per-peak outlines.
+    const addPath = function( item, isFill ){
+      const peak = item.peak;
+      const color = (peak.lineColor && peak.lineColor.length) ? peak.lineColor : spectrum.peakColor;
+      const path = self.peakVis.append("path")
+        .attr("d", item.d )
+        .attr("class", (isFill ? "peakFill" : "peakOutline") )
+        .attr("stroke-width", 1)
+        .attr("stroke", color )
+        .attr("fill-opacity", (isFill ? 0.6 : 0.0) )
+        .attr("data-energy", (peak.Centroid ? peak.Centroid[0].toFixed(2) : 0) );
+      if( isFill )
+        path.style("fill", color );
+
+      const info = {
         path: path,
-        paths: pathsAndRange.paths,
         roi: roi,
         lowerEnergy: roi.lowerEnergy,
         upperEnergy: roi.upperEnergy,
-        yRangePx: pathsAndRange.yRangePx,
-        xRangePx: [self.xScale(roi.lowerEnergy), self.xScale(roi.upperEnergy)],
-        color: peakColor,
-        isOutline: isOutline,
+        yRangePx: geom.yRangePx,
+        xRangePx: xRangePx,
+        color: color,
+        isOutline: (!isFill || !multi),
         isFill: isFill,
         peak: peak,
         spectrumIndex: specindex
       };
-      
       self.peakPaths.push( info );
-
-      path/* .attr("class", "peak") */
-          /* .attr("class", "spectrum-peak-" + specindex) */
-          .attr("stroke-width", 1)
-          .attr("stroke", peakColor )
-          ;
-            
-      path.attr("fill-opacity", ((isOutline && !isFill) ? 0.0 : 0.6) )
-          .attr("data-energy", ((peak && peak.Centroid) ? peak.Centroid[0].toFixed(2) : 0) );
-
-      if( isFill ){
-        path.style("fill", peakColor )
-            .attr("class", "peakFill" )
-      } else if( isOutline ) {
-        path.attr("class", "peakOutline" )
-      }
 
       /* Hover + context-menu handling is delegated to the peakVis group (see constructor);
          the info object on the node is what the delegated handlers key off of. */
       path.node().__peakInfo = info;
-    });//pathsAndRange.paths.forEach( function(p,num){
+      return color;
+    };//addPath
 
-    const p0 = (pathsAndRange.paths.length && roi.peaks.length) ? pathsAndRange.paths[0] : null;
-    console.assert( !p0 || p0.startsWith("M"), "Got p0 path not starting with 'M': " + p0 );
-    
-    if( p0 && !p0.endsWith("L") && p0.startsWith("M") && (spectrum.type === self.spectrumTypes.FOREGROUND) ){ //protect against single channel paths we didnt complete above; TODO: fix this
-      //Draw the continuum line for multiple peak ROIs - for the foreground only, right now
-      const path = self.peakVis.append("path").attr("d", pathsAndRange.paths[0] );
-      path.attr("stroke-width",1)
-          .attr("fill-opacity",0)
-          .attr("stroke", spectrum.peakColor );
+    const fillColors = geom.fills.map( (item) => addPath(item, true) );
+    geom.outlines.forEach( (item) => addPath(item, false) );
+
+    // The continuum line, for the foreground only - unless a single peak's fill outline already draws it.
+    if( (spectrum.type === self.spectrumTypes.FOREGROUND)
+        && (multi || (fillColors.length !== 1) || (fillColors[0] !== spectrum.peakColor)) ){
+      self.peakVis.append("path")
+        .attr("d", geom.cont )
+        .attr("stroke-width", 1)
+        .attr("fill-opacity", 0)
+        .attr("stroke", spectrum.peakColor );
     }
   };//function draw_roi(roi,specindex,spectrum)
 
   for (let i = 0; i < this.rawData.spectra.length; i++) {
     const spectrum = this.rawData.spectra[i];
-    
+
     if ((spectrum.type === self.spectrumTypes.FOREGROUND && !this.options.drawPeaksFor.FOREGROUND))
       continue;
     if ((spectrum.type === self.spectrumTypes.BACKGROUND && (!this.options.drawPeaksFor.BACKGROUND || this.options.backgroundSubtract)))
@@ -7844,11 +7743,11 @@ SpectrumChartD3.prototype.drawPeaks = function() {
           draw_roi(roi,i,spectrum);
       });
     }//if( this.rawData.spectra[i].peaks )
-    
+
     if( (self.leftDragMode === 'fitPeak') && self.roiBeingDrugUpdate && (this.rawData.spectra[i].type === self.spectrumTypes.FOREGROUND) )
       draw_roi(self.roiBeingDrugUpdate,i,spectrum);
   }
-  
+
   self.drawPeakLabels( labelinfo );
 }
 
@@ -7882,7 +7781,6 @@ SpectrumChartD3.prototype.drawPeakLabels = function( labelinfos ) {
       energy: 244.162
       peak: {type: "GaussianDefined", skewType: "NoSkew", Centroid: Array(3), Width: Array(3), Amplitude: Array(3), ...}
       roi: {type: "Linear", lowerEnergy: 220.469, upperEnergy: 271.636, referenceEnergy: 220.469, coeffs: Array(2),...}
-      roiPeakIndex: 0
       userLabel: undefined
    }
    */
@@ -10280,7 +10178,7 @@ SpectrumChartD3.prototype.handleCancelTouchCountGammas = function() {
 
 /** -------------- Peak Info and Display --------------
  *  Hover-over-peak info box and supporting peak lookup. */
-SpectrumChartD3.prototype.handleMouseOutPeak = function(peakElem, highlightedPeak, paths) {
+SpectrumChartD3.prototype.handleMouseOutPeak = function(peakElem, highlightedPeak) {
   /* Returns true if a node is a descendant (or is) of a parent node. */
   function isElementDescendantOf(parent, node) {
     while (node != null) {
