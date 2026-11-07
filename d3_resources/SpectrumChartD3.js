@@ -1212,10 +1212,6 @@ SpectrumChartD3.prototype.update = function() {
     const key = self.options.backgroundSubtract && ('bgsubtractpoints' in spectrum) ? 'bgsubtractpoints' : 'points';
     line.attr("d", self['line'+i](spectrum[key]));
   });
-
-  if (d3.event && d3.event.keyCode) {
-    SpectrumChartD3.stopEvent();
-  }
 }
 
 /** Step-after value of `points` at energy xVal: the y of the rightmost point with x <= xVal. */
@@ -4044,7 +4040,7 @@ SpectrumChartD3.prototype.applyLineStyling = function( lineElement, linedata, is
     if( isHovered && !hasMajorExtension ) {
       // Temporary hover extension, positioned like the major-extension
       const h = self.size.height;
-      const m = self.options.refLineTopPad;
+      const m = Math.min(h, self.options.refLineTopPad);
       const y2Lin = function(d){ return Math.min(h - (h-m)*d.h/d.parent.maxVisibleAmp, h-2); };
 
       lineSelection.selectAll("line.temp-extension").remove();
